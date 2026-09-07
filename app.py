@@ -3,12 +3,19 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 import datetime
+from zoneinfo import ZoneInfo
 import sqlite3
 
 # --- CẤU HÌNH GIAO DIỆN ---
 st.set_page_config(page_title="Quản Trị Kỷ Luật Bản Thân", layout="wide")
 
-# --- CSS TỐI ƯU MOBILE & KHÓA KỶ LUẬT ---
+# Cố định múi giờ Việt Nam (GMT+7)
+VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
+
+def get_vn_time_str():
+    return datetime.datetime.now(VN_TZ).strftime("%H:%M:%S - %d/%m")
+
+# --- CSS GIAO DIỆN TỐI ƯU MOBILE & KHÓA LỆNH ---
 st.markdown("""
 <style>
     .signal-banker {
@@ -136,7 +143,7 @@ def load_data():
 
 cfg, df_history = load_data()
 
-# Bộ nhớ tạm của Bàn cược
+# Bộ nhớ tạm của Bàn
 if "raw_inputs" not in st.session_state:
     st.session_state.raw_inputs = []
 if "main_road" not in st.session_state:
@@ -146,15 +153,15 @@ if "big_eye_cols" not in st.session_state:
 if "big_eye_list" not in st.session_state:
     st.session_state.big_eye_list = []
 
-# Trạng thái cược trong bàn:
-# 0: Chờ hạt 1 xuất hiện
-# 1: Đặt Lệnh 1 (Dự đoán hạt đỏ 1)
-# 2: Lệnh 1 thua -> Đặt Lệnh 2 (Dự đoán hạt đỏ 2)
-# 3: XONG BÀN (Lệnh 1 Thắng HOẶC Đã đánh xong Lệnh 2 -> Khóa bàn)
-if "table_status" not in st.session_state:
-    st.session_state.table_status = 0
+# Trạng thái cược trong phiên
+if "consecutive_wins" not in st.session_state:
+    st.session_state.consecutive_wins = 0
+if "last_order_win" not in st.session_state:
+    st.session_state.last_order_win = False
+if "session_orders_count" not in st.session_state:
+    st.session_state.session_orders_count = 0
 
-SESSION_NAMES = {
+SESSION_DICT = {
     1: "Phiên 1 (Sáng)",
     2: "Phiên 2 (Trưa)",
     3: "Phiên 3 (Chiều)",
@@ -210,7 +217,6 @@ def reset_table(new_table_idx):
     st.session_state.main_road = []
     st.session_state.big_eye_cols = []
     st.session_state.big_eye_list = []
-    st.session_state.table_status = 0
     conn = get_db()
     conn.execute("UPDATE config SET curr_table = ? WHERE id = 1", (new_table_idx,))
     conn.commit()
@@ -224,24 +230,48 @@ session_start_cap = float(cfg['session_start_cap'])
 initial_capital = float(cfg['initial_cap'])
 curr_session = int(cfg['curr_session'])
 
+# Tính toán lãi lỗ phiên
 session_profit = current_capital - session_start_cap
 session_profit_pct = (session_profit / session_start_cap) * 100 if session_start_cap > 0 else 0
 total_profit = current_capital - initial_capital
-s_name = SESSION_NAMES.get(curr_session, f"Phiên {curr_session}")
+
+# --- KHU VỰC CHỌN PHIÊN LINH HOẠT ---
+col_sel_s, col_table_num = st.columns([2, 1])
+with col_sel_s:
+    selected_session = st.selectbox(
+        "📅 Chọn Phiên Giao Dịch:",
+        options=[1, 2, 3, 4],
+        format_func=lambda x: SESSION_DICT[x],
+        index=curr_session - 1
+    )
+    if selected_session != curr_session:
+        conn = get_db()
+        # Khi chuyển phiên, đặt lại mốc vốn bắt đầu phiên = vốn thực tế hiện tại
+        conn.execute("UPDATE config SET curr_session = ?, session_start_cap = ? WHERE id = 1", (selected_session, current_capital))
+        conn.commit()
+        conn.close()
+        st.session_state.consecutive_wins = 0
+        st.session_state.last_order_win = False
+        st.session_state.session_orders_count = 0
+        reset_table(int(cfg['curr_table']) + 1)
+        st.rerun()
+
+with col_table_num:
+    st.metric("BÀN HIỆN TẠI", f"Bàn {int(cfg['curr_table'])}")
+
+s_name = SESSION_DICT.get(selected_session, f"Phiên {selected_session}")
 
 # --- HIỂN THỊ THÔNG SỐ VỐN ---
 col_m1, col_m2 = st.columns(2)
-col_m1.metric("VỐN THỰC TẾ", f"${current_capital:,.2f}", delta=f"${total_profit:+,.2f}")
+col_m1.metric("VỐN THỰC TẾ", f"${current_capital:,.2f}", delta=f"${total_profit:+,.2f} (Tổng)")
 col_m2.metric("VỐN BAN ĐẦU (GỐC 5%)", f"${initial_capital:,.2f}")
 
 col_m3, col_m4 = st.columns(2)
 col_m3.metric(f"LÃI/LỖ {s_name}", f"${session_profit:+,.2f}", delta=f"{session_profit_pct:.2f}%")
-col_m4.metric("TARGET PHIÊN (+5%)", f"+${session_start_cap * 0.05:,.2f}")
+col_m4.metric("TARGET CHỐT (+4.75% ➔ 5%)", f"+${session_start_cap * 0.0475:,.2f}")
 
-st.caption(f"📌 Bàn hiện tại: **Bàn {int(cfg['curr_table'])}** | Đã cược: **{len(df_history)} lệnh**")
-
-# MỤC ĐIỀU CHỈNH VỐN
-with st.expander("⚡ Điều Chỉnh Vốn & Đổi Bàn / Đổi Phiên"):
+# MỤC ĐIỀU CHỈNH VỐN TRỰC TIẾP
+with st.expander("⚡ Điều Chỉnh Vốn & Đổi Bàn Cược"):
     c_edit1, c_edit2 = st.columns(2)
     new_init_input = c_edit1.number_input("Sửa Vốn Ban Đầu ($):", min_value=10.0, value=initial_capital, step=50.0)
     new_curr_input = c_edit2.number_input("Sửa Vốn Thực Tế ($):", min_value=1.0, value=current_capital, step=50.0)
@@ -253,7 +283,9 @@ with st.expander("⚡ Điều Chỉnh Vốn & Đổi Bàn / Đổi Phiên"):
                      (new_init_input, new_curr_input, new_curr_input))
         conn.commit()
         conn.close()
-        st.session_state.table_status = 0
+        st.session_state.consecutive_wins = 0
+        st.session_state.last_order_win = False
+        st.session_state.session_orders_count = 0
         st.rerun()
     if cq2.button("🔄 Đổi Bàn Mới (Xóa Cầu)", use_container_width=True):
         reset_table(int(cfg['curr_table']) + 1)
@@ -261,24 +293,11 @@ with st.expander("⚡ Điều Chỉnh Vốn & Đổi Bàn / Đổi Phiên"):
 
 st.divider()
 
-# --- ĐIỀU KIỆN STOP PHIÊN (ĐÃ WIN LỆNH 1 ĐẠT TARGET HOẶC DƯƠNG >= 4.75%) ---
-# Banker ăn 0.95 là lãi 4.75% cũng tính là hoàn thành mục tiêu 5%
-is_session_stopped = (session_profit_pct >= 4.70)
+# --- ĐIỀU KIỆN STOP KHÓA PHIÊN: ĐẠT DƯƠNG >= 4.75% (BANKER ĂN 0.95 HOẶC PLAYER ĂN 1) ---
+is_session_stopped = (session_profit_pct >= 4.75)
 
 if is_session_stopped:
-    st.markdown(f'<div class="signal-stop">🛑 KỶ LUẬT THÉP: ĐÃ ĐẠT TARGET PHIÊN DƯƠNG {session_profit_pct:.2f}%!<br>BẮT BUỘC STOP - DỪNG VÀO LỆNH VÀ NGHỈ NGƠI NGAY LẬP TỨC.</div>', unsafe_allow_html=True)
-    next_s_idx = curr_session + 1
-    next_s_name = SESSION_NAMES.get(next_s_idx, f"Phiên {next_s_idx}")
-    if next_s_idx <= 4:
-        if st.button(f"✅ Xác Nhận Chốt Lời ➔ Chuyển Sang {next_s_name}", use_container_width=True):
-            conn = get_db()
-            conn.execute("UPDATE config SET curr_session = ?, session_start_cap = ? WHERE id = 1", (next_s_idx, current_capital))
-            conn.commit()
-            conn.close()
-            reset_table(int(cfg['curr_table']) + 1)
-            st.rerun()
-    else:
-        st.success("🎉 Bạn đã hoàn thành toàn bộ 4 phiên trong ngày!")
+    st.markdown(f'<div class="signal-stop">🛑 KỶ LUẬT THÉP: ĐÃ ĐẠT TARGET {session_profit_pct:.2f}% (≥ 4.75%)!<br>ĐÃ KHÓA PHIÊN {s_name.upper()} HOÀN TOÀN. NGHỈ NGƠI HOẶC CHỌN PHIÊN TIẾP THEO Ở TRÊN!</div>', unsafe_allow_html=True)
 
 # --- GIAO DIỆN BÀN CƯỢC & VÀO LỆNH ---
 tab_bet, tab_chart = st.tabs(["🎮 BÀN ĐÁNH & VÀO LỆNH", "📊 DASHBOARD TĂNG TRƯỞNG"])
@@ -326,40 +345,38 @@ with tab_bet:
 
     st.write("---")
 
-    # --- TÍNH TOÁN QUẢN LÝ TIỀN CƯỢC THEO VỐN BAN ĐẦU ---
+    # --- TÍNH TOÁN QUẢN LÝ VỐN CHẶT CHẼ THEO PHƯƠNG PHÁP ---
     base_5pct = initial_capital * 0.05
-    predicted_choice = find_red_choice()
     num_seeds = len(st.session_state.big_eye_list)
+    predicted_choice = find_red_choice()
 
     current_bet_side = None
     current_bet_amount = 0.0
-    order_name_tag = ""
+    strategy_note = ""
 
-    # --- KHỐI CẢNH BÁO TÍN HIỆU NGAY TRÊN NÚT BẤM ---
+    # THUẬT TOÁN ĐIỀU CHỈNH TIỀN CƯỢC:
+    # 1. Mặc định là 5% vốn ban đầu.
+    # 2. Nếu phiên đang ÂM (< 0): Lệnh nào WIN thì lệnh tiếp theo GẤP ĐÔI (10%) để bắt chuỗi 2 Win liên tiếp.
+    # 3. Nếu lệnh trước THUA hoặc vừa đạt đủ 2 Win: Về lại mức 5% cơ sở.
+    if session_profit < 0 and st.session_state.last_order_win and (st.session_state.consecutive_wins == 1):
+        current_bet_amount = base_5pct * 2.0
+        strategy_note = "10% (Gấp Đôi sau 1 Win - Đang gỡ âm)"
+    else:
+        current_bet_amount = base_5pct
+        strategy_note = "5% (Mức cơ bản theo Vốn Ban Đầu)"
+
+    # HIỂN THỊ CẢNH BÁO TÍN HIỆU NGAY TRÊN NÚT BẤM
     if is_session_stopped:
-        st.markdown('<div class="signal-stop">🛑 ĐÃ ĐẠT TARGET PHIÊN (+5%)! KHÓA BÀN - NGHỈ PHIÊN NGAY.</div>', unsafe_allow_html=True)
-    elif st.session_state.table_status == 3:
-        st.markdown('<div class="signal-stop">🛑 ĐÃ XONG BÀN NÀY (WIN LỆNH 1 HOẶC HẾT 2 LỆNH)!<br>BẮT BUỘC BẤM "🔄 ĐỔI BÀN MỚI" Ở TRÊN ĐỂ SANG BÀN KHÁC.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="signal-stop">🛑 PHIÊN ĐÃ ĐẠT TARGET (+5%)! KHÓA TOÀN BỘ LỆNH ĐỂ BẢO VỆ LỢI NHUẬN.</div>', unsafe_allow_html=True)
     elif num_seeds == 0:
-        st.markdown('<div class="signal-wait">⏳ Đang chờ Bảng phụ 1 xuất hiện hạt đầu tiên để vào chu kỳ 2 lệnh...</div>', unsafe_allow_html=True)
-    elif st.session_state.table_status == 1:
-        # LỆNH 1: Đánh 5%
+        st.markdown('<div class="signal-wait">⏳ Đang chờ Bảng phụ 1 xuất hiện hạt đầu tiên để tính điểm vào...</div>', unsafe_allow_html=True)
+    else:
         current_bet_side = predicted_choice
-        current_bet_amount = base_5pct
-        order_name_tag = "Lệnh 1 (5% Vốn Ban Đầu)"
         b_class = "signal-banker" if current_bet_side == "BANKER" else "signal-player"
-        st.markdown(f'<div class="{b_class}">🚨 ĐẶT LỆNH 1: ĐÁNH {current_bet_side} | ${current_bet_amount:,.2f}<br><span style="font-size: 13px; font-weight: normal;">(Nếu Thắng: STOP phiên chốt lời ngay)</span></div>', unsafe_allow_html=True)
-    elif st.session_state.table_status == 2:
-        # LỆNH 2: Lệnh 1 thua nên lệnh 2 vẫn đánh đúng 5% vốn ban đầu
-        current_bet_side = predicted_choice
-        current_bet_amount = base_5pct
-        order_name_tag = "Lệnh 2 (5% Vốn Ban Đầu - Sau Thua L1)"
-        b_class = "signal-banker" if current_bet_side == "BANKER" else "signal-player"
-        st.markdown(f'<div class="{b_class}">🚨 ĐẶT LỆNH 2: ĐÁNH {current_bet_side} | ${current_bet_amount:,.2f}<br><span style="font-size: 13px; font-weight: normal;">(Hết lệnh này dù Thắng hay Thua đều Đổi Bàn Mới)</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="{b_class}">🚨 ĐẶT CƯỢC: {current_bet_side} | ${current_bet_amount:,.2f}<br><span style="font-size: 13px; font-weight: normal;">Chiến lược: {strategy_note}</span></div>', unsafe_allow_html=True)
 
-    # --- HAI NÚT BẤM NHẬP KẾT QUẢ ---
-    # Nếu phiên đã hoàn thành hoặc bàn đã xong thì vô hiệu hóa nút bấm để người dùng không thể bấm tiếp
-    btn_disabled = is_session_stopped or (st.session_state.table_status == 3)
+    # Nút bấm cược (bị khóa nếu phiên đã STOP hoàn thành)
+    btn_disabled = is_session_stopped
 
     col_p, col_b = st.columns(2)
 
@@ -374,31 +391,29 @@ with tab_bet:
         if color is not None:
             st.session_state.big_eye_list.append(color)
             st.session_state.big_eye_cols = add_to_road(st.session_state.big_eye_cols, color)
-            # Khi hạt đầu tiên xuất hiện -> Kích hoạt Lệnh 1
-            if len(st.session_state.big_eye_list) == 1 and st.session_state.table_status == 0:
-                st.session_state.table_status = 1
 
-        # Nếu có lệnh đang đặt
+        # Xử lý kết quả cược
         if current_bet_side is not None and not is_session_stopped:
-            now_t = datetime.datetime.now().strftime("%H:%M:%S")
+            # LẤY GIỜ VIỆT NAM GMT+7
+            now_t = get_vn_time_str()
+            
             is_win = (outcome == "B" and current_bet_side == "BANKER") or (outcome == "P" and current_bet_side == "PLAYER")
             
-            pnl = (current_bet_amount * 0.95 if current_bet_side == "BANKER" else current_bet_amount) if is_win else -current_bet_amount
+            # Tỷ lệ trả thưởng: Banker 1 ăn 0.95, Player 1 ăn 1
+            if is_win:
+                pnl = current_bet_amount * 0.95 if current_bet_side == "BANKER" else current_bet_amount
+                st.session_state.consecutive_wins += 1
+                st.session_state.last_order_win = True
+            else:
+                pnl = -current_bet_amount
+                st.session_state.consecutive_wins = 0
+                st.session_state.last_order_win = False
+
+            st.session_state.session_orders_count += 1
             new_cap = current_capital + pnl
             res_str = "WIN" if is_win else "LOSE"
 
-            # QUY TẮC CHUYỂN TRẠNG THÁI:
-            # - Nếu đang ở Lệnh 1 và WIN -> XONG BÀN NGAY (chuyển sang trạng thái 3 để khóa)
-            # - Nếu đang ở Lệnh 1 và LOSE -> Chuyển sang Lệnh 2 (trạng thái 2)
-            # - Nếu đang ở Lệnh 2 (dù Thắng hay Thua) -> XONG BÀN (chuyển sang trạng thái 3)
-            if st.session_state.table_status == 1:
-                st.session_state.table_status = 3 if is_win else 2
-            elif st.session_state.table_status == 2:
-                st.session_state.table_status = 3
-
-            # CƠ CHẾ AUTO CÂN BẰNG VỐN:
-            # Vốn thực tế >= 2 lần vốn ban đầu -> Vốn ban đầu nâng lên
-            # Vốn thực tế <= 1/2 vốn ban đầu -> Vốn ban đầu hạ xuống
+            # Tự động cân bằng vốn:
             new_initial_cap = initial_capital
             if new_cap >= 2.0 * initial_capital:
                 new_initial_cap = new_cap
@@ -410,7 +425,7 @@ with tab_bet:
             conn.execute("""
                 INSERT INTO trade_history (time_str, session_idx, table_idx, order_name, bet_side, bet_amount, result, pnl, balance)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (now_t, curr_session, int(cfg['curr_table']), order_name_tag, current_bet_side, current_bet_amount, res_str, pnl, new_cap))
+            """, (now_t, selected_session, int(cfg['curr_table']), strategy_note, current_bet_side, current_bet_amount, res_str, pnl, new_cap))
             conn.commit()
             conn.close()
 
@@ -427,11 +442,11 @@ with tab_bet:
     st.subheader("📜 Nhật Ký Đặt Lệnh Chi Tiết")
     if not df_history.empty:
         disp_df = df_history[['time_str', 'session_idx', 'table_idx', 'order_name', 'bet_side', 'bet_amount', 'result', 'pnl', 'balance']].copy()
-        disp_df['session_idx'] = disp_df['session_idx'].apply(lambda x: SESSION_NAMES.get(x, f"Phiên {x}"))
+        disp_df['session_idx'] = disp_df['session_idx'].apply(lambda x: SESSION_DICT.get(x, f"Phiên {x}"))
         disp_df['bet_amount'] = disp_df['bet_amount'].apply(lambda x: f"${x:,.2f}")
         disp_df['pnl'] = disp_df['pnl'].apply(lambda x: f"${x:+,.2f}")
         disp_df['balance'] = disp_df['balance'].apply(lambda x: f"${x:,.2f}")
-        disp_df.columns = ['Giờ', 'Phiên', 'Bàn', 'Lệnh', 'Cửa', 'Tiền Đặt ($)', 'KQ', 'Lãi/Lỗ ($)', 'Số Dư ($)']
+        disp_df.columns = ['Giờ (GMT+7)', 'Phiên', 'Bàn', 'Chiến Lược', 'Cửa', 'Tiền Đặt ($)', 'KQ', 'Lãi/Lỗ ($)', 'Số Dư ($)']
         st.dataframe(disp_df, use_container_width=True)
 
 with tab_chart:
@@ -451,7 +466,7 @@ with tab_chart:
         c1, c2 = st.columns(2)
         with c1:
             session_sum = chart_df.groupby("session_idx")['pnl'].sum().reset_index()
-            session_sum['session_idx'] = session_sum['session_idx'].apply(lambda x: SESSION_NAMES.get(x, f"Phiên {x}"))
+            session_sum['session_idx'] = session_sum['session_idx'].apply(lambda x: SESSION_DICT.get(x, f"Phiên {x}"))
             fig_session = px.bar(session_sum, x="session_idx", y="pnl", title="Hiệu Quả Từng Phiên Trong Ngày ($)", color="pnl", color_continuous_scale=['#EF553B', '#00CC96'])
             st.plotly_chart(fig_session, use_container_width=True)
 
@@ -461,7 +476,7 @@ with tab_chart:
             fig_pie = px.pie(wl_count, values='Số Lệnh', names='Kết Quả', title="Tỷ Lệ Thắng / Thua", color='Kết Quả', color_discrete_map={'WIN': '#00CC96', 'LOSE': '#EF553B'})
             st.plotly_chart(fig_pie, use_container_width=True)
 
-# Thanh sidebar hỗ trợ đổi PIN và Đăng xuất
+# Sidebar
 with st.sidebar:
     st.markdown(f"### 👤 {s_name}")
     with st.expander("🔑 Đổi Mã PIN"):
