@@ -6,34 +6,34 @@ import datetime
 import sqlite3
 
 # --- CẤU HÌNH GIAO DIỆN ---
-st.set_page_config(page_title="Quản Lý Kỷ Luật & Soi Cầu Baccarat (USD)", layout="wide")
+st.set_page_config(page_title="Quản Trị Kỷ Luật Bản Thân", layout="wide")
 
-# --- CSS GIAO DIỆN KHỐI TÍN HIỆU TƯƠNG PHẢN CAO ---
+# --- CSS GIAO DIỆN TỐI ƯU MOBILE ---
 st.markdown("""
 <style>
     .signal-banker {
-        background-color: #dc2626; color: #ffffff; padding: 16px 20px;
-        border-radius: 8px; font-size: 21px; font-weight: 800; text-align: center;
-        box-shadow: 0 4px 6px rgba(220, 38, 38, 0.4); margin: 10px 0;
+        background-color: #dc2626; color: #ffffff; padding: 14px 16px;
+        border-radius: 8px; font-size: 19px; font-weight: 800; text-align: center;
+        box-shadow: 0 4px 6px rgba(220, 38, 38, 0.4); margin: 8px 0;
     }
     .signal-player {
-        background-color: #2563eb; color: #ffffff; padding: 16px 20px;
-        border-radius: 8px; font-size: 21px; font-weight: 800; text-align: center;
-        box-shadow: 0 4px 6px rgba(37, 99, 235, 0.4); margin: 10px 0;
+        background-color: #2563eb; color: #ffffff; padding: 14px 16px;
+        border-radius: 8px; font-size: 19px; font-weight: 800; text-align: center;
+        box-shadow: 0 4px 6px rgba(37, 99, 235, 0.4); margin: 8px 0;
     }
     .signal-wait {
-        background-color: #f4f4f5; color: #52525b; padding: 14px 20px;
-        border-radius: 8px; font-size: 16px; font-weight: 600; text-align: center;
-        border: 1px dashed #a1a1aa; margin: 10px 0;
+        background-color: #f4f4f5; color: #52525b; padding: 10px 14px;
+        border-radius: 6px; font-size: 14px; font-weight: 600; text-align: center;
+        border: 1px dashed #a1a1aa; margin: 8px 0;
     }
     .signal-stop {
-        background-color: #991b1b; color: #ffffff; padding: 16px 20px;
-        border-radius: 8px; font-size: 18px; font-weight: 800; text-align: center; margin: 10px 0;
+        background-color: #991b1b; color: #ffffff; padding: 14px 16px;
+        border-radius: 8px; font-size: 16px; font-weight: 800; text-align: center; margin: 8px 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- CƠ SỞ DỮ LIỆU SQLITE (LƯU BẢO MẬT & VĨNH VIỄN) ---
+# --- CƠ SỞ DỮ LIỆU SQLITE ---
 def get_db():
     return sqlite3.connect("baccarat_data.db", check_same_thread=False)
 
@@ -72,7 +72,6 @@ def init_db():
     """)
     c.execute("SELECT COUNT(*) FROM config")
     if c.fetchone()[0] == 0:
-        # Khởi tạo mặc định $1,000
         c.execute("INSERT INTO config VALUES (1, 1000.0, 1000.0, 1000.0, 1, 1)")
     conn.commit()
     conn.close()
@@ -94,36 +93,35 @@ def set_current_pin(new_pin):
     conn.commit()
     conn.close()
 
-# --- LỚP XÁC THỰC MÃ PIN BẢO MẬT ---
+# --- XÁC THỰC MÃ PIN ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 current_pin = get_current_pin()
 
 if not st.session_state.authenticated:
-    st.markdown("## 🔒 HỆ THỐNG QUẢN LÝ KỶ LUẬT RIÊNG TƯ")
+    st.markdown("## 🔒 QUẢN TRỊ KỶ LUẬT BẢN THÂN")
     if current_pin is None:
-        st.info("👋 Vui lòng thiết lập mã PIN bảo mật ban đầu để bảo vệ dữ liệu.")
-        p1 = st.text_input("Nhập mã PIN muốn tạo (ví dụ: 4-6 số):", type="password")
-        p2 = st.text_input("Xác nhận lại mã PIN vừa nhập:", type="password")
+        st.info("👋 Thiết lập mã PIN bảo mật ban đầu để bảo vệ dữ liệu.")
+        p1 = st.text_input("Nhập mã PIN muốn tạo:", type="password")
+        p2 = st.text_input("Xác nhận lại mã PIN:", type="password")
         if st.button("Lưu Mã PIN & Vào App"):
             if not p1:
                 st.error("Mã PIN không được để trống!")
             elif p1 != p2:
-                st.error("Hai lần nhập mã PIN không khớp nhau!")
+                st.error("Xác nhận mã PIN không khớp!")
             else:
                 set_current_pin(p1)
                 st.session_state.authenticated = True
-                st.success("Thiết lập mã PIN thành công!")
                 st.rerun()
     else:
-        pin_input = st.text_input("Nhập mã PIN bảo mật để mở khóa:", type="password")
+        pin_input = st.text_input("Nhập mã PIN bảo mật:", type="password")
         if st.button("Mở Khóa"):
             if pin_input == current_pin:
                 st.session_state.authenticated = True
                 st.rerun()
             else:
-                st.error("Mã PIN không đúng! Vui lòng nhập lại.")
+                st.error("Mã PIN không đúng!")
     st.stop()
 
 # --- TẢI DỮ LIỆU ---
@@ -136,7 +134,7 @@ def load_data():
 
 cfg, df_history = load_data()
 
-# Khởi tạo bộ nhớ tạm
+# Bộ nhớ đệm phiên
 if "raw_inputs" not in st.session_state:
     st.session_state.raw_inputs = []
 if "main_road" not in st.session_state:
@@ -151,7 +149,7 @@ if "trade_status" not in st.session_state:
 if "last_bet_amount" not in st.session_state:
     st.session_state.last_bet_amount = 0.0
 
-# --- THUẬT TOÁN ĐƯỜNG CẦU BACCARAT ---
+# --- THUẬT TOÁN ĐƯỜNG CẦU ---
 def add_to_road(road, val):
     new_road = [col.copy() for col in road]
     if not new_road:
@@ -201,49 +199,10 @@ def reset_table(new_table_idx):
     conn.commit()
     conn.close()
 
-# --- THANH BÊN (SIDEBAR): QUẢN LÝ VỐN USD & ĐỔI PIN ---
-with st.sidebar:
-    st.header("⚙️ Quản Lý Vốn (USD)")
-    new_init_cap = st.number_input("Số vốn ban đầu ($):", min_value=10.0, value=float(cfg['initial_cap']), step=50.0)
-    if st.button("💾 Cập Nhật Lại Vốn", use_container_width=True):
-        conn = get_db()
-        conn.execute("UPDATE config SET initial_cap=?, current_cap=?, session_start_cap=?, curr_session=1, curr_table=1 WHERE id=1", 
-                     (new_init_cap, new_init_cap, new_init_cap))
-        conn.execute("DELETE FROM trade_history")
-        conn.commit()
-        conn.close()
-        reset_table(1)
-        st.rerun()
+# --- TIÊU ĐỀ TRANG CHÍNH ---
+st.title("🎯 Quản Trị Kỷ Luật Bản Thân")
 
-    st.write("---")
-    st.markdown(f"**Phiên hiện tại:** `Phiên {int(cfg['curr_session'])} / 4`")
-    st.markdown(f"**Bàn hiện tại:** `Bàn {int(cfg['curr_table'])}`")
-    if st.button("🔄 Đổi Bàn Mới (Xóa cầu)", use_container_width=True):
-        reset_table(int(cfg['curr_table']) + 1)
-        st.rerun()
-
-    st.write("---")
-    with st.expander("🔑 Đổi Mã PIN Bảo Mật"):
-        old_p = st.text_input("Mã PIN hiện tại:", type="password", key="old_pin_field")
-        new_p1 = st.text_input("Mã PIN mới:", type="password", key="new_pin_1")
-        new_p2 = st.text_input("Xác nhận PIN mới:", type="password", key="new_pin_2")
-        if st.button("Lưu Mã PIN Mới", use_container_width=True):
-            if old_p != get_current_pin():
-                st.error("Mã PIN hiện tại không chính xác!")
-            elif not new_p1:
-                st.error("Mã PIN mới không được để trống!")
-            elif new_p1 != new_p2:
-                st.error("Xác nhận mã PIN mới không khớp!")
-            else:
-                set_current_pin(new_p1)
-                st.success("Đổi mã PIN thành công!")
-                st.rerun()
-
-    if st.button("🚪 Đăng Xuất", use_container_width=True):
-        st.session_state.authenticated = False
-        st.rerun()
-
-# --- HEADER DASHBOARD THỐNG KÊ (USD) ---
+# --- DASHBOARD CHỈ SỐ VÀ Ô CHỈNH SỬA VỐN TRỰC TIẾP TRÊN MOBILE ---
 current_capital = float(cfg['current_cap'])
 session_start_cap = float(cfg['session_start_cap'])
 initial_capital = float(cfg['initial_cap'])
@@ -252,19 +211,33 @@ session_profit = current_capital - session_start_cap
 session_profit_pct = (session_profit / session_start_cap) * 100
 total_profit = current_capital - initial_capital
 
-st.title("🎯 Quản Trị Kỷ Luật & Soi Cầu Baccarat")
-
-col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-col_m1.metric("VỐN THỰC TẾ", f"${current_capital:,.2f}", delta=f"${total_profit:+,.2f} (Tổng)")
+col_m1, col_m2 = st.columns(2)
+col_m1.metric("VỐN THỰC TẾ", f"${current_capital:,.2f}", delta=f"${total_profit:+,.2f}")
 col_m2.metric("LÃI/LỖ PHIÊN NÀY", f"${session_profit:+,.2f}", delta=f"{session_profit_pct:.2f}%")
+
+col_m3, col_m4 = st.columns(2)
 col_m3.metric("TARGET PHIÊN (5%)", f"${session_start_cap * 0.05:,.2f}")
 col_m4.metric("SỐ LỆNH ĐÃ ĐẶT", f"{len(df_history)} lệnh")
+
+# MỤC ĐIỀU CHỈNH VỐN TRỰC TIẾP TRÊN MÀN HÌNH ĐIỆN THOẠI
+with st.expander("⚡ Điều Chỉnh Lại Số Vốn Nhanh (Mobile)"):
+    quick_cap = st.number_input("Cập nhật lại vốn ($):", min_value=10.0, value=current_capital, step=50.0, key="quick_cap_input")
+    col_q1, col_q2 = st.columns(2)
+    if col_q1.button("Lưu Vốn Này", use_container_width=True):
+        conn = get_db()
+        conn.execute("UPDATE config SET current_cap = ?, session_start_cap = ? WHERE id = 1", (quick_cap, quick_cap))
+        conn.commit()
+        conn.close()
+        st.rerun()
+    if col_q2.button("🔄 Đổi Bàn Mới", use_container_width=True):
+        reset_table(int(cfg['curr_table']) + 1)
+        st.rerun()
 
 st.divider()
 
 # Cảnh báo Target phiên 5%
 if session_profit_pct >= 5.0:
-    st.error(f"🛑 CẢNH BÁO STOP! Đã đạt target phiên: +{session_profit_pct:.2f}% (≥ 5%). DỪNG PHIÊN NGAY LẬP TỨC!")
+    st.error(f"🛑 CẢNH BÁO STOP! Đã đạt target phiên: +{session_profit_pct:.2f}% (≥ 5%). DỪNG PHIÊN NGAY!")
     if st.button("Xác Nhận Chốt Lời ➔ Sang Phiên Mới"):
         conn = get_db()
         next_s = int(cfg['curr_session']) + 1
@@ -275,40 +248,14 @@ if session_profit_pct >= 5.0:
             reset_table(int(cfg['curr_table']) + 1)
             st.rerun()
         else:
-            st.warning("Đã hoàn thành toàn bộ 4 phiên trong ngày!")
+            st.warning("Đã hoàn thành 4 phiên trong ngày!")
             conn.close()
 
-# --- TAB GIAO DIỆN ---
+# --- CÁC TAB GIAO DIỆN ---
 tab_bet, tab_chart = st.tabs(["🎮 BÀN ĐÁNH & VÀO LỆNH", "📊 DASHBOARD BIỂU ĐỒ LÃI KÉP"])
 
 with tab_bet:
-    st.markdown("### 🔔 VÀO LỆNH NGAY :")
-    base_5pct = current_capital * 0.05
-    predicted_choice = find_red_choice()
-    num_seeds = len(st.session_state.big_eye_list)
-
-    current_bet_side = None
-    current_bet_amount = 0.0
-
-    if st.session_state.trade_status == 3:
-        st.markdown('<div class="signal-stop">🛑 ĐÃ HOÀN THÀNH BÀN NÀY (HẾT 2 HẠT ĐỎ HOẶC ĐÃ WIN LỆNH 1)! BẤM "ĐỔI BÀN MỚI" ĐỂ TIẾP TỤC.</div>', unsafe_allow_html=True)
-    elif num_seeds == 0:
-        st.markdown('<div class="signal-wait">⏳ Đang chờ Bảng phụ 1 xuất hiện hạt đầu tiên... (Nhập kết quả các ván bài bên dưới)</div>', unsafe_allow_html=True)
-    elif st.session_state.trade_status == 1:
-        current_bet_side = predicted_choice
-        current_bet_amount = base_5pct
-        st.session_state.last_bet_amount = base_5pct
-        b_class = "signal-banker" if current_bet_side == "BANKER" else "signal-player"
-        st.markdown(f'<div class="{b_class}">🚨 ĐẶT LỆNH 1: ĐÁNH {current_bet_side} | SỐ TIỀN: ${current_bet_amount:,.2f} (5% Vốn)</div>', unsafe_allow_html=True)
-    elif st.session_state.trade_status == 2:
-        current_bet_side = predicted_choice
-        current_bet_amount = st.session_state.last_bet_amount
-        b_class = "signal-banker" if current_bet_side == "BANKER" else "signal-player"
-        st.markdown(f'<div class="{b_class}">🚨 ĐẶT LỆNH 2: ĐÁNH {current_bet_side} | SỐ TIỀN: ${current_bet_amount:,.2f} (Bằng số tiền Lệnh 1)</div>', unsafe_allow_html=True)
-
-    st.divider()
-
-    # Bảng cầu
+    # Bảng cầu HTML
     def build_html_board(columns, is_big_eye=False):
         total_cols = max(55, len(columns) + 5)
         html = """<style>
@@ -316,12 +263,12 @@ with tab_bet:
             body { font-family: sans-serif; background: transparent; }
             .wrapper { background: #ffffff; border: 1px solid #71717a; overflow-x: auto; white-space: nowrap; width: 100%; padding: 2px; }
             table { border-collapse: collapse; table-layout: fixed; background: #ffffff; }
-            th { width: 26px; min-width: 26px; height: 20px; border: 1px solid #d4d4d8; border-bottom: 2px solid #27272a; font-size: 11px; font-weight: bold; color: #3f3f46; text-align: center; background: #f4f4f5; }
-            td { width: 26px; min-width: 26px; height: 26px; border: 1px solid #e4e4e7; text-align: center; vertical-align: middle; padding: 0; }
-            .circle-b { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid #dc2626; margin: auto; }
-            .circle-p { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid #2563eb; margin: auto; }
-            .eye-red { width: 15px; height: 15px; border-radius: 50%; border: 2px solid #dc2626; margin: auto; }
-            .eye-blue { width: 15px; height: 15px; border-radius: 50%; border: 2px solid #2563eb; margin: auto; }
+            th { width: 24px; min-width: 24px; height: 18px; border: 1px solid #d4d4d8; border-bottom: 2px solid #27272a; font-size: 10px; font-weight: bold; color: #3f3f46; text-align: center; background: #f4f4f5; }
+            td { width: 24px; min-width: 24px; height: 24px; border: 1px solid #e4e4e7; text-align: center; vertical-align: middle; padding: 0; }
+            .circle-b { width: 16px; height: 16px; border-radius: 50%; border: 2.2px solid #dc2626; margin: auto; }
+            .circle-p { width: 16px; height: 16px; border-radius: 50%; border: 2.2px solid #2563eb; margin: auto; }
+            .eye-red { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #dc2626; margin: auto; }
+            .eye-blue { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #2563eb; margin: auto; }
         </style><div class="wrapper"><table><thead><tr>"""
         for c in range(1, total_cols + 1):
             html += f"<th>{c}</th>"
@@ -340,17 +287,43 @@ with tab_bet:
         return html
 
     st.markdown("##### 🔴🔵 Bảng Chính (Big Road)")
-    st.components.v1.html(build_html_board(st.session_state.main_road, is_big_eye=False), height=205, scrolling=True)
+    st.components.v1.html(build_html_board(st.session_state.main_road, is_big_eye=False), height=185, scrolling=True)
 
     st.markdown(f"##### 🔴🔵 Bảng Phụ 1 - Big Eye Boy ({len(st.session_state.big_eye_list)} hạt)")
-    st.components.v1.html(build_html_board(st.session_state.big_eye_cols, is_big_eye=True), height=205, scrolling=True)
+    st.components.v1.html(build_html_board(st.session_state.big_eye_cols, is_big_eye=True), height=185, scrolling=True)
 
     if st.session_state.raw_inputs:
         tags = ["<span style='color: #dc2626; font-weight: bold;'>🔴 B</span>" if x == "B" else "<span style='color: #2563eb; font-weight: bold;'>🔵 P</span>" for x in st.session_state.raw_inputs]
-        st.markdown("**Các tay vừa nhập:** " + " ➔ ".join(tags[-25:]), unsafe_allow_html=True)
+        st.markdown("**Các tay vừa nhập:** " + " ➔ ".join(tags[-20:]), unsafe_allow_html=True)
 
-    st.divider()
+    st.write("---")
 
+    # --- TÍNH TOÁN TÍN HIỆU CƯỢC ---
+    base_5pct = current_capital * 0.05
+    predicted_choice = find_red_choice()
+    num_seeds = len(st.session_state.big_eye_list)
+
+    current_bet_side = None
+    current_bet_amount = 0.0
+
+    # KHỐI CẢNH BÁO ĐẶT NGAY DƯỚI BẢNG CẦU (VỊ TRÍ KHOANH ĐỎ Ở ẢNH 2)
+    if st.session_state.trade_status == 3:
+        st.markdown('<div class="signal-stop">🛑 ĐÃ XONG BÀN NÀY! BẤM "ĐỔI BÀN MỚI" Ở TRÊN ĐỂ TIẾP TỤC.</div>', unsafe_allow_html=True)
+    elif num_seeds == 0:
+        st.markdown('<div class="signal-wait">⏳ Đang chờ Bảng phụ 1 xuất hiện hạt đầu tiên...</div>', unsafe_allow_html=True)
+    elif st.session_state.trade_status == 1:
+        current_bet_side = predicted_choice
+        current_bet_amount = base_5pct
+        st.session_state.last_bet_amount = base_5pct
+        b_class = "signal-banker" if current_bet_side == "BANKER" else "signal-player"
+        st.markdown(f'<div class="{b_class}">🚨 ĐẶT LỆNH 1: ĐÁNH {current_bet_side} | ${current_bet_amount:,.2f} (5%)</div>', unsafe_allow_html=True)
+    elif st.session_state.trade_status == 2:
+        current_bet_side = predicted_choice
+        current_bet_amount = st.session_state.last_bet_amount
+        b_class = "signal-banker" if current_bet_side == "BANKER" else "signal-player"
+        st.markdown(f'<div class="{b_class}">🚨 ĐẶT LỆNH 2: ĐÁNH {current_bet_side} | ${current_bet_amount:,.2f}</div>', unsafe_allow_html=True)
+
+    # --- HAI NÚT BẤM NHẬP KẾT QUẢ NẰM NGAY BÊN DƯỚI TÍN HIỆU ---
     col_p, col_b = st.columns(2)
 
     def handle_input(outcome):
@@ -398,7 +371,7 @@ with tab_bet:
             handle_input("B")
             st.rerun()
 
-    st.divider()
+    st.write("---")
     st.subheader("📜 Lịch Sử Cược Chi Tiết")
     if not df_history.empty:
         display_df = df_history[['time_str', 'session_idx', 'table_idx', 'order_name', 'bet_side', 'bet_amount', 'result', 'pnl', 'balance']].copy()
@@ -409,12 +382,11 @@ with tab_bet:
         st.dataframe(display_df, use_container_width=True)
 
 with tab_chart:
-    st.subheader("📈 BÁO CÁO DASHBOARD TĂNG TRƯỞNG LÃI KÉP (USD)")
+    st.subheader("📈 BÁO CÁO TĂNG TRƯỞNG VỐN (USD)")
     if df_history.empty:
-        st.info("Chưa có dữ liệu lệnh. Hãy đặt một vài lệnh để hiển thị biểu đồ phân tích.")
+        st.info("Chưa có dữ liệu lệnh.")
     else:
         chart_df = df_history.sort_values(by="id", ascending=True).copy()
-        
         steps = [0] + list(range(1, len(chart_df) + 1))
         actual_balances = [initial_capital] + chart_df['balance'].tolist()
         
@@ -424,15 +396,15 @@ with tab_chart:
             
         fig_equity = go.Figure()
         fig_equity.add_trace(go.Scatter(x=steps, y=actual_balances, mode='lines+markers', name='Vốn Thực Tế ($)', line=dict(color='#00CC96', width=3)))
-        fig_equity.add_trace(go.Scatter(x=steps, y=target_compound, mode='lines', name='Mục Tiêu Lãi Kép (+5%/lệnh)', line=dict(color='#FFA15A', dash='dash')))
-        fig_equity.update_layout(title="Đường Cong Tăng Trưởng Vốn Thực Tế vs Mục Tiêu Lãi Kép", xaxis_title="Chuỗi Lệnh Đã Đánh", yaxis_title="Số Dư ($)", template="plotly_white")
+        fig_equity.add_trace(go.Scatter(x=steps, y=target_compound, mode='lines', name='Target Lãi Kép (+5%)', line=dict(color='#FFA15A', dash='dash')))
+        fig_equity.update_layout(title="Đường Cong Vốn vs Lãi Kép Mục Tiêu", xaxis_title="Chuỗi Lệnh", yaxis_title="Số Dư ($)", template="plotly_white")
         st.plotly_chart(fig_equity, use_container_width=True)
 
         c_left, c_right = st.columns(2)
         with c_left:
             session_sum = chart_df.groupby("session_idx")['pnl'].sum().reset_index()
             session_sum['session_idx'] = session_sum['session_idx'].apply(lambda x: f"Phiên {x}")
-            fig_session = px.bar(session_sum, x="session_idx", y="pnl", title="Tổng Lợi Nhuận Từng Phiên ($)", color="pnl", color_continuous_scale=['#EF553B', '#00CC96'])
+            fig_session = px.bar(session_sum, x="session_idx", y="pnl", title="Tổng Lãi Lỗ Từng Phiên ($)", color="pnl", color_continuous_scale=['#EF553B', '#00CC96'])
             st.plotly_chart(fig_session, use_container_width=True)
 
         with c_right:
@@ -440,3 +412,24 @@ with tab_chart:
             win_loss_count.columns = ['Kết Quả', 'Số Lệnh']
             fig_pie = px.pie(win_loss_count, values='Số Lệnh', names='Kết Quả', title="Tỷ Lệ Thắng / Thua", color='Kết Quả', color_discrete_map={'WIN': '#00CC96', 'LOSE': '#EF553B'})
             st.plotly_chart(fig_pie, use_container_width=True)
+
+# Thanh sidebar bổ sung mục đổi PIN & Đăng xuất
+with st.sidebar:
+    st.write(f"**Bàn hiện tại:** `Bàn {int(cfg['curr_table'])}` | `Phiên {int(cfg['curr_session'])} / 4`")
+    with st.expander("🔑 Đổi Mã PIN"):
+        old_p = st.text_input("Mã PIN hiện tại:", type="password", key="old_p_key")
+        new_p1 = st.text_input("Mã PIN mới:", type="password", key="new_p1_key")
+        new_p2 = st.text_input("Xác nhận PIN mới:", type="password", key="new_p2_key")
+        if st.button("Lưu PIN Mới", use_container_width=True):
+            if old_p != get_current_pin():
+                st.error("PIN hiện tại sai!")
+            elif not new_p1 or new_p1 != new_p2:
+                st.error("PIN mới không khớp hoặc bị trống!")
+            else:
+                set_current_pin(new_p1)
+                st.success("Đã đổi PIN thành công!")
+                st.rerun()
+
+    if st.button("🚪 Đăng Xuất", use_container_width=True):
+        st.session_state.authenticated = False
+        st.rerun()
