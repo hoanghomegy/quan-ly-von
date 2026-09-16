@@ -5,488 +5,614 @@ from zoneinfo import ZoneInfo
 import sqlite3
 import os
 
-# --- CẤU HÌNH GIAO DIỆN NHẸ MƯỢT ---
-st.set_page_config(page_title="Quản Trị Kỷ Luật Bản Thân", layout="wide", initial_sidebar_state="collapsed")
+# --- CẤU HÌNH HỆ THỐNG & GIAO DIỆN ---
+st.set_page_config(
+    page_title="Quản Trị Kỷ Luật Bản Thân",
+    page_icon="🎯",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
+# Múi giờ Việt Nam GMT+7
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
-def get_vn_time_str():
-    return datetime.datetime.now(VN_TZ).strftime("%H:%M:%S - %d/%m")
+def get_vn_now():
+    return datetime.datetime.now(VN_TZ)
 
-# CSS tối ưu tốc độ render trên mobile
+# --- MÃ PIN CỐ ĐỊNH AN TOÀN (Tùy chỉnh số bạn thích) ---
+MASTER_PIN = "6868"
+
+# --- CSS SIÊU TỐI ƯU GIAO DIỆN VÀ TỐC ĐỘ BẤM NÚT TRÊN MOBILE ---
 st.markdown("""
 <style>
-    .signal-banker {
-        background-color: #dc2626; color: #ffffff; padding: 12px;
-        border-radius: 8px; font-size: 18px; font-weight: 800; text-align: center; margin: 8px 0;
+    /* Ẩn các icon thừa của streamlit để tăng tốc render */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    .metric-container {
+        background-color: #1e1e24; border-radius: 8px; padding: 10px; border: 1px solid #333;
     }
-    .signal-player {
-        background-color: #2563eb; color: #ffffff; padding: 12px;
-        border-radius: 8px; font-size: 18px; font-weight: 800; text-align: center; margin: 8px 0;
+    .box-signal-banker {
+        background-color: #d32f2f !important;
+        color: #ffffff !important;
+        padding: 16px;
+        border-radius: 10px;
+        font-size: 20px;
+        font-weight: 900;
+        text-align: center;
+        margin: 10px 0;
+        box-shadow: 0 4px 12px rgba(211, 47, 47, 0.6);
+        letter-spacing: 1px;
     }
-    .signal-wait {
-        background-color: #27272a; color: #a1a1aa; padding: 10px;
-        border-radius: 6px; font-size: 14px; font-weight: 600; text-align: center; margin: 8px 0;
+    .box-signal-player {
+        background-color: #1976d2 !important;
+        color: #ffffff !important;
+        padding: 16px;
+        border-radius: 10px;
+        font-size: 20px;
+        font-weight: 900;
+        text-align: center;
+        margin: 10px 0;
+        box-shadow: 0 4px 12px rgba(25, 118, 210, 0.6);
+        letter-spacing: 1px;
+    }
+    .box-signal-wait {
+        background-color: #27272a;
+        color: #a1a1aa;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 600;
+        text-align: center;
+        margin: 10px 0;
         border: 1px dashed #52525b;
     }
-    .signal-stop {
-        background-color: #991b1b; color: #ffffff; padding: 15px;
-        border-radius: 8px; font-size: 16px; font-weight: 800; text-align: center; margin: 8px 0;
+    .box-signal-stop {
+        background-color: #7f1d1d;
+        color: #fecaca;
+        padding: 18px;
+        border-radius: 10px;
+        font-size: 18px;
+        font-weight: 900;
+        text-align: center;
+        margin: 10px 0;
         border: 2px solid #ef4444;
+        box-shadow: 0 4px 14px rgba(239, 68, 68, 0.5);
     }
-    .signal-table-stop {
-        background-color: #b45309; color: #ffffff; padding: 14px;
-        border-radius: 8px; font-size: 16px; font-weight: 800; text-align: center; margin: 8px 0;
+    .box-signal-table-lock {
+        background-color: #78350f;
+        color: #fde68a;
+        padding: 14px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 800;
+        text-align: center;
+        margin: 10px 0;
         border: 2px solid #f59e0b;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- CƠ SỞ DỮ LIỆU SQLITE BỀN VỮNG ---
-DB_PATH = "baccarat_data.db"
+# --- DATABASE QUẢN LÝ DỮ LIỆU BỀN VỮNG (SQLITE CÓ FILE DỰ PHÒNG) ---
+DB_FILE = "baccarat_system.db"
+BACKUP_CSV = "trade_history_backup.csv"
 
-def get_db():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
+def get_db_connection():
+    return sqlite3.connect(DB_FILE, check_same_thread=False)
 
-def init_db():
-    conn = get_db()
+def init_system_database():
+    conn = get_db_connection()
     c = conn.cursor()
+    # Bảng lưu trữ cấu hình vốn & trạng thái
     c.execute("""
-        CREATE TABLE IF NOT EXISTS auth_security (
-            id INTEGER PRIMARY KEY,
-            pin_code TEXT
-        )
-    """)
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS config (
+        CREATE TABLE IF NOT EXISTS system_config (
             id INTEGER PRIMARY KEY,
             initial_cap REAL,
             current_cap REAL,
             session_start_cap REAL,
-            curr_session INTEGER,
-            curr_table INTEGER,
-            orders_in_current_table INTEGER
+            curr_session_idx INTEGER,
+            curr_table_num INTEGER,
+            table_orders_count INTEGER,
+            last_date TEXT
         )
     """)
+    # Bảng lịch sử đặt lệnh chi tiết
     c.execute("""
         CREATE TABLE IF NOT EXISTS trade_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trade_date TEXT,
             time_str TEXT,
+            session_name TEXT,
             session_idx INTEGER,
-            table_idx INTEGER,
-            order_name TEXT,
+            table_num INTEGER,
+            order_in_session INTEGER,
+            order_in_table INTEGER,
+            strategy_desc TEXT,
             bet_side TEXT,
             bet_amount REAL,
             result TEXT,
             pnl REAL,
-            balance REAL
+            ending_balance REAL
         )
     """)
-    # Kiểm tra cấu hình ban đầu
-    c.execute("SELECT COUNT(*) FROM config")
+    
+    c.execute("SELECT COUNT(*) FROM system_config")
     if c.fetchone()[0] == 0:
-        c.execute("INSERT INTO config VALUES (1, 200.0, 200.0, 200.0, 1, 1, 0)")
-    else:
-        # Đảm bảo cột orders_in_current_table tồn tại
-        try:
-            c.execute("ALTER TABLE config ADD COLUMN orders_in_current_table INTEGER DEFAULT 0")
-        except:
-            pass
+        today_str = get_vn_now().strftime("%Y-%m-%d")
+        c.execute("""
+            INSERT INTO system_config VALUES (1, 200.0, 200.0, 200.0, 1, 1, 0, ?)
+        """, (today_str,))
     conn.commit()
     conn.close()
 
-init_db()
+init_system_database()
 
-def get_current_pin():
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT pin_code FROM auth_security WHERE id = 1")
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else None
+# --- XÁC THỰC BẢO MẬT BẰNG PIN ---
+if "is_auth" not in st.session_state:
+    st.session_state.is_auth = False
 
-def set_current_pin(new_pin):
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO auth_security (id, pin_code) VALUES (1, ?)", (new_pin,))
-    conn.commit()
-    conn.close()
-
-# --- XÁC THỰC MÃ PIN ---
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-
-current_pin = get_current_pin()
-
-if not st.session_state.authenticated:
-    st.markdown("## 🔒 QUẢN TRỊ KỶ LUẬT BẢN THÂN")
-    if current_pin is None:
-        st.info("👋 Thiết lập mã PIN bảo mật ban đầu để bảo vệ dữ liệu.")
-        p1 = st.text_input("Nhập mã PIN muốn tạo:", type="password")
-        p2 = st.text_input("Xác nhận lại mã PIN:", type="password")
-        if st.button("Lưu Mã PIN & Vào App"):
-            if not p1:
-                st.error("Mã PIN không được để trống!")
-            elif p1 != p2:
-                st.error("Xác nhận không khớp!")
-            else:
-                set_current_pin(p1)
-                st.session_state.authenticated = True
-                st.rerun()
-    else:
-        pin_input = st.text_input("Nhập mã PIN:", type="password")
-        if st.button("Mở Khóa"):
-            if pin_input == current_pin:
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("Mã PIN không đúng!")
+if not st.session_state.is_auth:
+    st.markdown("<h2 style='text-align:center;'>🔒 QUẢN TRỊ KỶ LUẬT BẢN THÂN</h2>", unsafe_allow_html=True)
+    st.write("Vui lòng nhập mã PIN bảo mật để vào phiên làm việc:")
+    pin = st.text_input("Nhập mã PIN:", type="password", key="pin_login")
+    if st.button("MỞ KHÓA BÀN ĐÁNH", use_container_width=True):
+        if pin == MASTER_PIN:
+            st.session_state.is_auth = True
+            st.rerun()
+        else:
+            st.error("❌ Mã PIN không chính xác!")
     st.stop()
 
-# --- TẢI DỮ LIỆU TỪ DATABASE ---
-def load_data():
-    conn = get_db()
-    cfg = pd.read_sql("SELECT * FROM config WHERE id = 1", conn).iloc[0]
+# --- TẢI DỮ LIỆU & ĐỒNG BỘ MỐC VỐN ---
+def load_app_state():
+    conn = get_db_connection()
+    cfg = pd.read_sql("SELECT * FROM system_config WHERE id = 1", conn).iloc[0]
     his = pd.read_sql("SELECT * FROM trade_history ORDER BY id DESC", conn)
     conn.close()
     return cfg, his
 
-cfg, df_history = load_data()
+cfg, df_history = load_app_state()
 
-# Bộ nhớ tạm phiên hiện tại
-if "raw_inputs" not in st.session_state:
-    st.session_state.raw_inputs = []
-if "main_road" not in st.session_state:
-    st.session_state.main_road = []
-if "big_eye_cols" not in st.session_state:
-    st.session_state.big_eye_cols = []
-if "big_eye_list" not in st.session_state:
-    st.session_state.big_eye_list = []
+initial_capital = float(cfg['initial_cap'])
+current_capital = float(cfg['current_cap'])
+session_start_cap = float(cfg['session_start_cap'])
+curr_session = int(cfg['curr_session_idx'])
+curr_table = int(cfg['curr_table_num'])
+orders_in_table = int(cfg['table_orders_count'])
 
-SESSION_DICT = {
+SESSION_MAP = {
     1: "Phiên 1 (Sáng)",
     2: "Phiên 2 (Trưa)",
     3: "Phiên 3 (Chiều)",
     4: "Phiên 4 (Tối)"
 }
 
-# --- THUẬT TOÁN ĐƯỜNG CẦU ---
-def add_to_road(road, val):
-    new_road = [col.copy() for col in road]
-    if not new_road:
-        new_road.append([val])
+# --- BỘ ĐỆM ĐƯỜNG CẦU TRONG BÀN ---
+if "inputs_raw" not in st.session_state:
+    st.session_state.inputs_raw = []
+if "road_main" not in st.session_state:
+    st.session_state.road_main = []
+if "road_bigeye" not in st.session_state:
+    st.session_state.road_bigeye = []
+if "list_bigeye" not in st.session_state:
+    st.session_state.list_bigeye = []
+
+# --- THUẬT TOÁN ĐƯỜNG CẦU QUỐC TẾ CHUẨN XÁC ---
+def append_road(road, val):
+    new_r = [c.copy() for c in road]
+    if not new_r:
+        new_r.append([val])
     else:
-        if new_road[-1][-1] == val:
-            new_road[-1].append(val)
+        if new_r[-1][-1] == val:
+            new_r[-1].append(val)
         else:
-            new_road.append([val])
-    return new_road
+            new_r.append([val])
+    return new_r
 
-def get_big_eye_color(road, col_idx, row_idx):
-    if col_idx == 0 or (col_idx == 1 and row_idx == 0):
+def calc_big_eye_color(road, col_i, row_i):
+    if col_i == 0 or (col_i == 1 and row_i == 0):
         return None
-    if row_idx > 0:
-        prev_len = len(road[col_idx - 1])
-        return "RED" if prev_len >= (row_idx + 1) else "BLUE"
+    if row_i > 0:
+        prev_len = len(road[col_i - 1])
+        return "RED" if prev_len >= (row_i + 1) else "BLUE"
     else:
-        if col_idx >= 2:
-            return "RED" if len(road[col_idx - 1]) == len(road[col_idx - 2]) else "BLUE"
+        if col_i >= 2:
+            return "RED" if len(road[col_i - 1]) == len(road[col_i - 2]) else "BLUE"
         return None
 
-def find_red_choice():
-    road = st.session_state.main_road
+def predict_side_for_red():
+    """Tìm cửa đặt (PLAYER hay BANKER) để bảng phụ 1 tạo ra HẠT ĐỎ"""
+    road = st.session_state.road_main
     if not road:
         return "BANKER"
-    sim_p = add_to_road(road, "P")
+    
+    # Thử giả lập PLAYER
+    sim_p = append_road(road, "P")
     cp, rp = len(sim_p) - 1, len(sim_p[-1]) - 1
-    color_p = get_big_eye_color(sim_p, cp, rp)
+    color_p = calc_big_eye_color(sim_p, cp, rp)
 
-    sim_b = add_to_road(road, "B")
+    # Thử giả lập BANKER
+    sim_b = append_road(road, "B")
     cb, rb = len(sim_b) - 1, len(sim_b[-1]) - 1
-    color_b = get_big_eye_color(sim_b, cb, rb)
+    color_b = calc_big_eye_color(sim_b, cb, rb)
 
     if color_p == "RED" and color_b != "RED":
         return "PLAYER"
     elif color_b == "RED" and color_p != "RED":
         return "BANKER"
     else:
-        last_val = road[-1][-1]
-        return "PLAYER" if last_val == "P" else "BANKER"
+        # Trường hợp cả 2 cùng màu: Đánh theo nhịp bệt hiện tại
+        return "PLAYER" if road[-1][-1] == "P" else "BANKER"
 
-def reset_table(new_table_idx):
-    st.session_state.raw_inputs = []
-    st.session_state.main_road = []
-    st.session_state.big_eye_cols = []
-    st.session_state.big_eye_list = []
-    conn = get_db()
-    conn.execute("UPDATE config SET curr_table = ?, orders_in_current_table = 0 WHERE id = 1", (new_table_idx,))
+def execute_reset_table(next_table_num):
+    st.session_state.inputs_raw = []
+    st.session_state.road_main = []
+    st.session_state.road_bigeye = []
+    st.session_state.list_bigeye = []
+    conn = get_db_connection()
+    conn.execute("UPDATE system_config SET curr_table_num = ?, table_orders_count = 0 WHERE id = 1", (next_table_num,))
     conn.commit()
     conn.close()
 
-# --- GIAO DIỆN CHÍNH ---
-st.title("🎯 Quản Trị Kỷ Luật Bản Thân")
+# --- HEADER & BỘ ĐIỀU HƯỚNG PHIÊN ---
+st.markdown("<h3 style='margin-bottom:0px;'>🎯 Quản Trị Kỷ Luật Bản Thân</h3>", unsafe_allow_html=True)
 
-current_capital = float(cfg['current_cap'])
-session_start_cap = float(cfg['session_start_cap'])
-initial_capital = float(cfg['initial_cap'])
-curr_session = int(cfg['curr_session'])
-orders_in_table = int(cfg.get('orders_in_current_table', 0))
+# Lọc các lệnh của phiên hiện tại trong ngày hôm nay
+today_str = get_vn_now().strftime("%d/%m/%Y")
+session_trades = df_history[
+    (df_history['session_idx'] == curr_session) & 
+    (df_history['trade_date'] == today_str)
+].sort_values(by="id", ascending=True)
 
-# --- CHỌN PHIÊN ---
-col_sel_s, col_table_num = st.columns([2, 1])
-with col_sel_s:
-    selected_session = st.selectbox(
-        "📅 Chọn Phiên Giao Dịch:",
-        options=[1, 2, 3, 4],
-        format_func=lambda x: SESSION_DICT[x],
-        index=curr_session - 1
-    )
-    if selected_session != curr_session:
-        conn = get_db()
-        conn.execute("UPDATE config SET curr_session = ?, session_start_cap = ?, orders_in_current_table = 0 WHERE id = 1", 
-                     (selected_session, current_capital))
-        conn.commit()
-        conn.close()
-        reset_table(int(cfg['curr_table']) + 1)
-        st.rerun()
-
-with col_table_num:
-    st.metric("BÀN HIỆN TẠI", f"Bàn {int(cfg['curr_table'])}", delta=f"{orders_in_table}/2 lệnh")
-
-s_name = SESSION_DICT.get(selected_session, f"Phiên {selected_session}")
-
-# Trích xuất toàn bộ lệnh của riêng phiên đang chọn
-session_trades = df_history[df_history['session_idx'] == selected_session].sort_values(by="id", ascending=True)
-num_session_trades = len(session_trades)
+order_in_session_count = len(session_trades)
 session_profit = current_capital - session_start_cap
 session_profit_pct = (session_profit / session_start_cap) * 100 if session_start_cap > 0 else 0
-total_profit = current_capital - initial_capital
 
-# --- KIỂM TRA ĐIỀU KIỆN STOP PHIÊN ---
-# 1. Lệnh 1 của phiên win -> BẮT BUỘC STOP
-is_first_trade_win = False
-if num_session_trades >= 1:
-    if session_trades.iloc[0]['result'] == 'WIN':
-        is_first_trade_win = True
+# --- KIỂM TRA ĐIỀU KIỆN STOP / KHÓA PHIÊN ---
+# 1. Target WIN: Nếu lệnh 1 của phiên WIN -> Khóa ngay! Hoặc tổng lãi phiên >= +4.70% (chạm 5%)
+is_first_trade_win = (order_in_session_count >= 1 and session_trades.iloc[0]['result'] == 'WIN')
+is_session_profit_reached = (session_profit_pct >= 4.70) or (session_profit >= initial_capital * 0.047)
+is_session_target_win = is_first_trade_win or is_session_profit_reached
 
-# 2. Hoặc sau chuỗi gỡ mà tài khoản dương đạt target (4.7% -> 5%)
-is_profit_target_reached = (session_profit >= (initial_capital * 0.047)) or (session_profit_pct >= 4.70)
+# 2. Target LOSE: Phiên lỗ chạm -50% vốn -> Dừng phiên cắt lỗ tuyệt đối!
+is_session_target_lose = (session_profit <= -(session_start_cap * 0.50)) or (session_profit_pct <= -50.0)
 
-is_session_stopped = is_first_trade_win or is_profit_target_reached
+is_session_locked = is_session_target_win or is_session_target_lose
+is_table_locked = (orders_in_table >= 2)
 
-# --- HIỂN THỊ CHỈ SỐ VỐN ---
-col_m1, col_m2 = st.columns(2)
-col_m1.metric("VỐN THỰC TẾ", f"${current_capital:,.2f}", delta=f"${total_profit:+,.2f} (Tổng)")
-col_m2.metric("VỐN BAN ĐẦU (GỐC 5%)", f"${initial_capital:,.2f}")
+# Hàng điều khiển Phiên & Bàn
+col_h1, col_h2 = st.columns([2, 1])
+with col_h1:
+    selected_sess = st.selectbox(
+        "📅 Chọn Phiên Giao Dịch Trong Ngày:",
+        options=[1, 2, 3, 4],
+        format_func=lambda x: SESSION_MAP[x],
+        index=curr_session - 1
+    )
+    if selected_sess != curr_session:
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE system_config 
+            SET curr_session_idx = ?, session_start_cap = ?, table_orders_count = 0 
+            WHERE id = 1
+        """, (selected_sess, current_capital))
+        conn.commit()
+        conn.close()
+        execute_reset_table(curr_table + 1)
+        st.rerun()
 
-col_m3, col_m4 = st.columns(2)
-col_m3.metric(f"LÃI/LỖ {s_name}", f"${session_profit:+,.2f}", delta=f"{session_profit_pct:.2f}%")
-col_m4.metric("TARGET PHIÊN (5%)", f"+${initial_capital * 0.05:,.2f}")
+with col_h2:
+    st.metric("BÀN HIỆN TẠI", f"Bàn {curr_table}", delta=f"{orders_in_table}/2 lệnh cược")
 
-# Menu chỉnh sửa vốn & đổi bàn
-with st.expander("⚡ Điều Chỉnh Vốn & Đổi Bàn Cược"):
-    c_edit1, c_edit2 = st.columns(2)
-    new_init_input = c_edit1.number_input("Vốn Ban Đầu ($):", min_value=10.0, value=initial_capital, step=50.0)
-    new_curr_input = c_edit2.number_input("Vốn Thực Tế ($):", min_value=1.0, value=current_capital, step=50.0)
-    cq1, cq2 = st.columns(2)
-    if cq1.button("💾 Lưu Vốn", use_container_width=True):
-        conn = get_db()
-        conn.execute("UPDATE config SET initial_cap = ?, current_cap = ?, session_start_cap = ? WHERE id = 1", 
-                     (new_init_input, new_curr_input, new_curr_input))
+# --- HÀNG CHỈ SỐ VỐN THỰC TẾ & VỐN BAN ĐẦU ---
+c_m1, c_m2 = st.columns(2)
+c_m1.metric("VỐN THỰC TẾ (SỐ DƯ)", f"${current_capital:,.2f}", delta=f"${current_capital - initial_capital:+,.2f} (Tổng)")
+c_m2.metric("VỐN BAN ĐẦU (MỐC 5%)", f"${initial_capital:,.2f}")
+
+c_m3, c_m4 = st.columns(2)
+c_m3.metric(f"LÃI/LỖ {SESSION_MAP[curr_session]}", f"${session_profit:+,.2f}", delta=f"{session_profit_pct:.2f}%")
+c_m4.metric("TARGET CHỐT PHIÊN (+5%)", f"+${initial_capital * 0.05:,.2f}", delta="Cắt lỗ: -50%")
+
+# Nút đổi bàn & chỉnh sửa vốn
+with st.expander("⚡ Cài Đặt Vốn & Quản Lý Bàn"):
+    ce1, ce2 = st.columns(2)
+    custom_init = ce1.number_input("Sửa Vốn Gốc Cơ Sở ($):", value=initial_capital, step=50.0)
+    custom_curr = ce2.number_input("Sửa Vốn Thực Tế Hiện Có ($):", value=current_capital, step=50.0)
+    cb1, cb2 = st.columns(2)
+    if cb1.button("💾 Lưu Cập Nhật Vốn", use_container_width=True):
+        conn = get_db_connection()
+        conn.execute("UPDATE system_config SET initial_cap = ?, current_cap = ?, session_start_cap = ? WHERE id = 1", 
+                     (custom_init, custom_curr, custom_curr))
         conn.commit()
         conn.close()
         st.rerun()
-    if cq2.button("🔄 ĐỔI BÀN MỚI (XÓA CẦU)", use_container_width=True):
-        reset_table(int(cfg['curr_table']) + 1)
+    if cb2.button("🔄 ĐỔI BÀN MỚI (XÓA CẦU)", use_container_width=True):
+        execute_reset_table(curr_table + 1)
         st.rerun()
 
-st.divider()
+# --- KHỐI CẢNH BÁO STOP PHIÊN HOẶC KHÓA BÀN ---
+if is_session_target_win:
+    st.markdown("""
+        <div class="box-signal-stop">
+            🛑 KỶ LUẬT THÉP: ĐÃ ĐẠT TARGET DƯƠNG 5% CỦA PHIÊN!<br>
+            BẮT BUỘC DỪNG PHIÊN NGAY LẬP TỨC. HÃY TẮT ỨNG DỤNG VÀ NGHỈ NGƠI!
+        </div>
+    """, unsafe_allow_html=True)
+elif is_session_target_lose:
+    st.markdown("""
+        <div class="box-signal-stop">
+            🛑 BẢO VỆ TÀI KHOẢN: ĐÃ CHẠM MỐC DỪNG LỖ (-50%)!<br>
+            BẮT BUỘC KHÓA PHIÊN NGAY LẬP TỨC. KHÔNG ĐƯỢC GỠ!
+        </div>
+    """, unsafe_allow_html=True)
+elif is_table_locked:
+    st.markdown("""
+        <div class="box-signal-table-lock">
+            ⚠️ BÀN NÀY ĐÃ ĐỦ 2 LỆNH CƯỢC!<br>
+            BẮT BUỘC BẤM NÚT "🔄 ĐỔI BÀN MỚI" Ở MỤC TRÊN ĐỂ TIẾP TỤC THEO QUẢN LÝ VỐN.
+        </div>
+    """, unsafe_allow_html=True)
 
-# THÔNG BÁO STOP PHIÊN
-if is_session_stopped:
-    reason_str = "LỆNH 1 ĐẦU PHIÊN ĐÃ THẮNG (+5%)" if is_first_trade_win else f"TÀI KHOẢN ĐÃ DƯƠNG TARGET (+{session_profit_pct:.2f}%)"
-    st.markdown(f'<div class="signal-stop">🛑 KỶ LUẬT THÉP: {reason_str}!<br>BẮT BUỘC STOP TOÀN BỘ PHIÊN NÀY. TẮT APP VÀ NGHỈ NGƠI!</div>', unsafe_allow_html=True)
+# --- TAB GIAO DIỆN ---
+tab_game, tab_history, tab_report = st.tabs(["🎮 BÀN ĐÁNH & VÀO LỆNH", "📜 LỊCH SỬ CƯỢC", "📊 BÁO CÁO NGÀY/TUẦN/THÁNG"])
 
-# KIỂM TRA ĐIỀU KIỆN KHÓA BÀN (MỖI BÀN CHỈ ĐƯỢC 2 LỆNH)
-is_table_locked = (orders_in_table >= 2)
-if is_table_locked and not is_session_stopped:
-    st.markdown(f'<div class="signal-table-stop">⚠️ BÀN NÀY ĐÃ ĐỦ 2 LỆNH (TỐI ĐA)!<br>BẮT BUỘC BẤM "🔄 ĐỔI BÀN MỚI" Ở MỤC TRÊN ĐỂ TIẾP TỤC QUẢN LÝ VỐN PHIÊN.</div>', unsafe_allow_html=True)
-
-# --- BÀN CƯỢC & VÀO LỆNH ---
-tab_bet, tab_chart = st.tabs(["🎮 BÀN ĐÁNH & VÀO LỆNH", "📊 NHẬT KÝ & BÁO CÁO"])
-
-with tab_bet:
-    # Bảng vẽ cầu rút gọn tốc độ cao (chỉ vẽ 35 cột để chống lag trên điện thoại)
-    def build_fast_board(columns, is_big_eye=False):
+with tab_game:
+    # Hàm vẽ cầu siêu nhẹ, không lag
+    def render_light_board(columns, is_big_eye=False):
         total_cols = max(35, len(columns) + 3)
         html = """<style>
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            .w { background: #18181b; overflow-x: auto; white-space: nowrap; width: 100%; padding: 2px; border: 1px solid #3f3f46; border-radius: 4px; }
+            .b-wrap { background: #121214; overflow-x: auto; white-space: nowrap; width: 100%; border: 1px solid #333; border-radius: 6px; padding: 2px; }
             table { border-collapse: collapse; table-layout: fixed; }
-            th { width: 22px; min-width: 22px; height: 16px; border: 1px solid #3f3f46; font-size: 9px; color: #a1a1aa; text-align: center; background: #27272a; }
-            td { width: 22px; min-width: 22px; height: 22px; border: 1px solid #27272a; text-align: center; vertical-align: middle; }
-            .cb { width: 15px; height: 15px; border-radius: 50%; border: 2.2px solid #ef4444; margin: auto; }
-            .cp { width: 15px; height: 15px; border-radius: 50%; border: 2.2px solid #3b82f6; margin: auto; }
-            .er { width: 13px; height: 13px; border-radius: 50%; border: 2px solid #ef4444; margin: auto; }
-            .eb { width: 13px; height: 13px; border-radius: 50%; border: 2px solid #3b82f6; margin: auto; }
-        </style><div class="w"><table><thead><tr>"""
+            th { width: 22px; min-width: 22px; height: 16px; border: 1px solid #2d2d30; font-size: 9px; color: #888; text-align: center; background: #1e1e24; }
+            td { width: 22px; min-width: 22px; height: 22px; border: 1px solid #222; text-align: center; vertical-align: middle; padding: 0; }
+            .c-b { width: 15px; height: 15px; border-radius: 50%; border: 2.5px solid #d32f2f; margin: auto; }
+            .c-p { width: 15px; height: 15px; border-radius: 50%; border: 2.5px solid #1976d2; margin: auto; }
+            .e-r { width: 13px; height: 13px; border-radius: 50%; border: 2px solid #d32f2f; margin: auto; }
+            .e-b { width: 13px; height: 13px; border-radius: 50%; border: 2px solid #1976d2; margin: auto; }
+        </style><div class="b-wrap"><table><thead><tr>"""
         for c in range(1, total_cols + 1):
             html += f"<th>{c}</th>"
         html += "</tr></thead><tbody>"
         for r in range(6):
             html += "<tr>"
             for c in range(total_cols):
-                cnt = ""
+                cell_div = ""
                 if c < len(columns) and r < len(columns[c]):
-                    v = columns[c][r]
-                    cls = ("cb" if v == "B" else "cp") if not is_big_eye else ("er" if v == "RED" else "eb")
-                    cnt = f'<div class="{cls}"></div>'
-                html += f"<td>{cnt}</td>"
+                    val = columns[c][r]
+                    if not is_big_eye:
+                        cell_div = f'<div class="{"c-b" if val=="B" else "c-p"}"></div>'
+                    else:
+                        cell_div = f'<div class="{"e-r" if val=="RED" else "e-b"}"></div>'
+                html += f"<td>{cell_div}</td>"
             html += "</tr>"
         html += "</tbody></table></div>"
         return html
 
     st.markdown("##### 🔴🔵 Bảng Chính (Big Road)")
-    st.components.v1.html(build_fast_board(st.session_state.main_road, is_big_eye=False), height=170, scrolling=True)
+    st.components.v1.html(render_light_board(st.session_state.road_main, False), height=170, scrolling=True)
 
-    st.markdown(f"##### 🔴🔵 Bảng Phụ 1 - Big Eye Boy ({len(st.session_state.big_eye_list)} hạt)")
-    st.components.v1.html(build_fast_board(st.session_state.big_eye_cols, is_big_eye=True), height=170, scrolling=True)
+    st.markdown(f"##### 🔴🔵 Bảng Phụ 1 - Big Eye Boy ({len(st.session_state.list_bigeye)} hạt)")
+    st.components.v1.html(render_light_board(st.session_state.road_bigeye, True), height=170, scrolling=True)
 
-    if st.session_state.raw_inputs:
-        tags = ["<span style='color: #ef4444; font-weight: bold;'>🔴 B</span>" if x == "B" else "<span style='color: #3b82f6; font-weight: bold;'>🔵 P</span>" for x in st.session_state.raw_inputs]
-        st.markdown("**Đã nhập:** " + " ➔ ".join(tags[-15:]), unsafe_allow_html=True)
+    if st.session_state.inputs_raw:
+        tag_list = [f"<span style='color:{'#d32f2f' if x=='B' else '#1976d2'}; font-weight:bold;'>{'🔴 B' if x=='B' else '🔵 P'}</span>" for x in st.session_state.inputs_raw]
+        st.markdown("**Các tay vừa nhập:** " + " ➔ ".join(tag_list[-15:]), unsafe_allow_html=True)
 
     st.write("---")
 
-    # --- QUẢN LÝ TIỀN CƯỢC LOGIC CHUẨN ---
-    base_5pct = initial_capital * 0.05
-    num_seeds = len(st.session_state.big_eye_list)
-    predicted_choice = find_red_choice()
+    # --- TÍNH TOÁN QUY MÔ TIỀN CƯỢC THEO QUẢN LÝ VỐN 2 LỆNH WIN LIÊN TIẾP ---
+    base_bet = initial_capital * 0.05
+    num_seeds = len(st.session_state.list_bigeye)
+    predicted_choice = predict_side_for_red()
 
     current_bet_side = None
     current_bet_amount = 0.0
-    strategy_note = ""
+    strategy_label = ""
 
-    if num_session_trades == 0:
-        # Lệnh đầu tiên của phiên: Luôn đánh 5%
-        current_bet_amount = base_5pct
-        strategy_note = "Lệnh 1 (5% Vốn - Thắng là STOP Phiên)"
+    # Kiểm tra chuỗi Win gần nhất trong phiên
+    consec_wins = 0
+    for _, r in session_trades.iloc[::-1].iterrows():
+        if r['result'] == 'WIN':
+            consec_wins += 1
+        else:
+            break
+
+    # Phân bổ mức cược:
+    if order_in_session_count == 0:
+        current_bet_amount = base_bet
+        strategy_label = "Lệnh 1 (5% Vốn Ban Đầu - Thắng là STOP)"
     else:
-        # Đếm số lệnh WIN liên tiếp tính ngược từ lệnh gần nhất
-        consec_wins = 0
-        for _, r in session_trades.iloc[::-1].iterrows():
-            if r['result'] == 'WIN':
-                consec_wins += 1
-            else:
-                break
-
-        # Nếu đang âm so với đầu phiên:
+        # Nếu đang âm: Win 1 lệnh lẻ -> Gấp đôi 10% để bắt nhịp 2 Win
         if session_profit < 0:
             if consec_wins == 1:
-                current_bet_amount = base_5pct * 2.0  # Lệnh trước win -> Lệnh sau gấp đôi (10%)
-                strategy_note = "10% (Gấp Đôi sau 1 Win - Săn chuỗi 2 Win)"
+                current_bet_amount = base_bet * 2.0
+                strategy_label = "10% (Gấp Đôi sau 1 Win - Tìm nhịp 2 WIN)"
             else:
-                current_bet_amount = base_5pct  # Lệnh trước thua hoặc đã đủ 2 win mà chưa dương -> về 5%
-                strategy_note = "5% Vốn Ban Đầu (Bảo toàn vốn)"
+                current_bet_amount = base_bet
+                strategy_label = "5% Vốn (Sau Thua hoặc sau 2 Win)"
         else:
-            current_bet_amount = base_5pct
-            strategy_note = "5% Vốn Ban Đầu"
+            current_bet_amount = base_bet
+            strategy_label = "5% Vốn Ban Đầu"
 
-    # Hiển thị tín hiệu
-    if is_session_stopped:
-        st.markdown('<div class="signal-stop">🛑 PHIÊN ĐÃ ĐẠT MỤC TIÊU! TOÀN BỘ LỆNH ĐÃ KHÓA CỨNG.</div>', unsafe_allow_html=True)
+    # HIỂN THỊ CẢNH BÁO VÀO LỆNH (NỀN ĐỎ CHỮ TRẮNG CHO BANKER, NỀN XANH CHỮ TRẮNG CHO PLAYER)
+    if is_session_locked:
+        st.markdown('<div class="box-signal-stop">🛑 PHIÊN ĐÃ HOÀN THÀNH HOẶC KHÓA DỪNG LỖ. KHÔNG THỂ ĐẶT THÊM.</div>', unsafe_allow_html=True)
     elif is_table_locked:
-        st.markdown('<div class="signal-table-stop">🛑 BÀN ĐÃ HẾT 2 LỆNH! HÃY BẤM "🔄 ĐỔI BÀN MỚI" Ở TRÊN.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="box-signal-table-lock">🛑 BÀN NÀY ĐÃ ĐỦ 2 LỆNH! VUI LÒNG BẤM "🔄 ĐỔI BÀN MỚI".</div>', unsafe_allow_html=True)
     elif num_seeds == 0:
-        st.markdown('<div class="signal-wait">⏳ Đang chờ Bảng phụ 1 xuất hiện hạt đầu tiên...</div>', unsafe_allow_html=True)
+        st.markdown('<div class="box-signal-wait">⏳ Đang chờ Bảng phụ 1 xuất hiện hạt đầu tiên (Xanh hoặc Đỏ) để tính lệnh vào...</div>', unsafe_allow_html=True)
     else:
         current_bet_side = predicted_choice
-        b_class = "signal-banker" if current_bet_side == "BANKER" else "signal-player"
-        st.markdown(f'<div class="{b_class}">🚨 ĐẶT CƯỢC: {current_bet_side} | ${current_bet_amount:,.2f}<br><span style="font-size: 13px; font-weight: normal;">(Lệnh {orders_in_table + 1}/2 của bàn - {strategy_note})</span></div>', unsafe_allow_html=True)
+        if current_bet_side == "BANKER":
+            st.markdown(f"""
+                <div class="box-signal-banker">
+                    🚨 DỰ ĐOÁN: BANKER | ${current_bet_amount:,.2f}<br>
+                    <span style="font-size:14px; font-weight:normal;">Lệnh {orders_in_table + 1}/2 bàn • {strategy_label}</span>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+                <div class="box-signal-player">
+                    🚨 DỰ ĐOÁN: PLAYER | ${current_bet_amount:,.2f}<br>
+                    <span style="font-size:14px; font-weight:normal;">Lệnh {orders_in_table + 1}/2 bàn • {strategy_label}</span>
+                </div>
+            """, unsafe_allow_html=True)
 
-    # NÚT BẤM CƯỢC: Khóa nếu phiên dừng hoặc bàn đã đủ 2 lệnh
-    btn_disabled = is_session_stopped or is_table_locked
+    # NÚT BẤM CƯỢC: Khóa nếu phiên STOP hoặc bàn đã đủ 2 lệnh
+    can_press = not is_session_locked and not is_table_locked
 
-    col_p, col_b = st.columns(2)
+    col_btn_p, col_btn_b = st.columns(2)
 
-    def handle_result_input(outcome):
+    def handle_click_outcome(outcome):
         global initial_capital, current_capital, orders_in_table
-        st.session_state.raw_inputs.append(outcome)
-        st.session_state.main_road = add_to_road(st.session_state.main_road, outcome)
-        road = st.session_state.main_road
-        c_idx, r_idx = len(road) - 1, len(road[-1]) - 1
+        # 1. Cập nhật bảng cầu
+        st.session_state.inputs_raw.append(outcome)
+        st.session_state.road_main = append_road(st.session_state.road_main, outcome)
+        road = st.session_state.road_main
+        ci, ri = len(road) - 1, len(road[-1]) - 1
 
-        color = get_big_eye_color(road, c_idx, r_idx)
+        color = calc_big_eye_color(road, ci, ri)
         if color is not None:
-            st.session_state.big_eye_list.append(color)
-            st.session_state.big_eye_cols = add_to_road(st.session_state.big_eye_cols, color)
+            st.session_state.list_bigeye.append(color)
+            st.session_state.road_bigeye = append_road(st.session_state.road_bigeye, color)
 
-        if current_bet_side is not None and not is_session_stopped and not is_table_locked:
-            now_t = get_vn_time_str()
+        # 2. Xử lý lệnh cược nếu có tín hiệu
+        if current_bet_side is not None and not is_session_locked and not is_table_locked:
+            vn_now = get_vn_now()
+            t_date = vn_now.strftime("%d/%m/%Y")
+            t_time = vn_now.strftime("%H:%M:%S")
+
             is_win = (outcome == "B" and current_bet_side == "BANKER") or (outcome == "P" and current_bet_side == "PLAYER")
             
-            pnl = (current_bet_amount * 0.95 if current_bet_side == "BANKER" else current_bet_amount) if is_win else -current_bet_amount
-            new_cap = current_capital + pnl
+            # Tỷ lệ: Player 1:1, Banker 1:0.95, Thua -100%
+            if is_win:
+                pnl = current_bet_amount * 0.95 if current_bet_side == "BANKER" else current_bet_amount
+            else:
+                pnl = -current_bet_amount
+
+            new_current_cap = current_capital + pnl
             res_str = "WIN" if is_win else "LOSE"
 
-            # Tự động cân bằng vốn ban đầu
+            # QUY ƯỚC TỰ ĐỘNG CẬP NHẬT VỐN GỐC (DƯƠNG 100% HOẶC ÂM 50%):
             new_initial_cap = initial_capital
-            if new_cap >= 2.0 * initial_capital:
-                new_initial_cap = new_cap
-            elif new_cap <= 0.5 * initial_capital:
-                new_initial_cap = new_cap
+            if new_current_cap >= 2.0 * initial_capital:
+                new_initial_cap = new_current_cap  # Tăng gấp đôi mốc vốn gốc
+            elif new_current_cap <= 0.5 * initial_capital:
+                new_initial_cap = new_current_cap  # Giảm 50% mốc vốn gốc
 
-            new_orders_in_table = orders_in_table + 1
+            new_table_orders = orders_in_table + 1
+            new_session_orders = order_in_session_count + 1
 
-            conn = get_db()
-            conn.execute("UPDATE config SET current_cap = ?, initial_cap = ?, orders_in_current_table = ? WHERE id = 1", 
-                         (new_cap, new_initial_cap, new_orders_in_table))
+            # Lưu trực tiếp vào Database
+            conn = get_db_connection()
             conn.execute("""
-                INSERT INTO trade_history (time_str, session_idx, table_idx, order_name, bet_side, bet_amount, result, pnl, balance)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (now_t, selected_session, int(cfg['curr_table']), strategy_note, current_bet_side, current_bet_amount, res_str, pnl, new_cap))
+                UPDATE system_config 
+                SET current_cap = ?, initial_cap = ?, table_orders_count = ? 
+                WHERE id = 1
+            """, (new_current_cap, new_initial_cap, new_table_orders))
+
+            conn.execute("""
+                INSERT INTO trade_history (
+                    trade_date, time_str, session_name, session_idx, table_num, 
+                    order_in_session, order_in_table, strategy_desc, bet_side, 
+                    bet_amount, result, pnl, ending_balance
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                t_date, t_time, SESSION_MAP[curr_session], curr_session, curr_table,
+                new_session_orders, new_table_orders, strategy_label, current_bet_side,
+                current_bet_amount, res_str, pnl, new_current_cap
+            ))
             conn.commit()
             conn.close()
 
-    with col_p:
-        if st.button("🔵 PLAYER (P)", use_container_width=True, disabled=btn_disabled):
-            handle_result_input("P")
+    with col_btn_p:
+        if st.button("🔵 PLAYER (P)", use_container_width=True, disabled=not can_press):
+            handle_click_outcome("P")
             st.rerun()
-    with col_b:
-        if st.button("🔴 BANKER (B)", use_container_width=True, disabled=btn_disabled):
-            handle_result_input("B")
+    with col_btn_b:
+        if st.button("🔴 BANKER (B)", use_container_width=True, disabled=not can_press):
+            handle_click_outcome("B")
             st.rerun()
 
-with tab_chart:
-    st.subheader("📜 Nhật Ký Đặt Lệnh Chi Tiết")
+with tab_history:
+    st.subheader("📜 Nhật Ký Giao Dịch Chi Tiết")
     if not df_history.empty:
-        disp_df = df_history[['time_str', 'session_idx', 'table_idx', 'order_name', 'bet_side', 'bet_amount', 'result', 'pnl', 'balance']].copy()
-        disp_df['session_idx'] = disp_df['session_idx'].apply(lambda x: SESSION_DICT.get(x, f"Phiên {x}"))
-        disp_df['bet_amount'] = disp_df['bet_amount'].apply(lambda x: f"${x:,.2f}")
-        disp_df['pnl'] = disp_df['pnl'].apply(lambda x: f"${x:+,.2f}")
-        disp_df['balance'] = disp_df['balance'].apply(lambda x: f"${x:,.2f}")
-        disp_df.columns = ['Giờ (GMT+7)', 'Phiên', 'Bàn', 'Chiến Lược', 'Cửa', 'Tiền Đặt ($)', 'KQ', 'Lãi/Lỗ ($)', 'Số Dư ($)']
-        st.dataframe(disp_df, use_container_width=True)
+        # Chuẩn hóa bảng hiển thị đầy đủ theo đúng yêu cầu
+        h_df = df_history[[
+            'trade_date', 'time_str', 'session_name', 'order_in_session', 'table_num', 
+            'order_in_table', 'strategy_desc', 'bet_side', 'bet_amount', 'result', 'pnl', 'ending_balance'
+        ]].copy()
+        h_df['bet_amount'] = h_df['bet_amount'].apply(lambda x: f"${x:,.2f}")
+        h_df['pnl'] = h_df['pnl'].apply(lambda x: f"${x:+,.2f}")
+        h_df['ending_balance'] = h_df['ending_balance'].apply(lambda x: f"${x:,.2f}")
+        h_df.columns = [
+            'Ngày', 'Giờ', 'Phiên', 'STT Phiên', 'Bàn', 
+            'STT Bàn', 'Chiến Lược', 'Cửa Đặt', 'Tiền Đặt ($)', 'Kết Quả', 'Lãi/Lỗ ($)', 'Vốn Biến Động ($)'
+        ]
+        st.dataframe(h_df, use_container_width=True)
+        
+        # Nút xuất dữ liệu CSV về điện thoại để an tâm lưu giữ
+        csv_data = df_history.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Tải Nhật Ký Cược Toàn Bộ (.CSV) Về Máy",
+            data=csv_data,
+            file_name=f"baccarat_history_{get_vn_now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
     else:
-        st.info("Chưa có lệnh nào được lưu.")
+        st.info("Chưa có dữ liệu đặt cược nào.")
 
-# Sidebar
-with st.sidebar:
-    st.markdown(f"### 👤 {s_name}")
-    with st.expander("🔑 Đổi Mã PIN"):
-        old_p = st.text_input("Mã PIN hiện tại:", type="password", key="sb_old_pin")
-        new_p1 = st.text_input("Mã PIN mới:", type="password", key="sb_new_pin1")
-        new_p2 = st.text_input("Xác nhận lại PIN:", type="password", key="sb_new_pin2")
-        if st.button("Cập Nhật PIN", use_container_width=True):
-            if old_p != get_current_pin():
-                st.error("PIN hiện tại không đúng!")
-            elif not new_p1 or new_p1 != new_p2:
-                st.error("Xác nhận PIN không khớp!")
-            else:
-                set_current_pin(new_p1)
-                st.success("Đổi mã PIN thành công!")
-                st.rerun()
+with tab_report:
+    st.subheader("📊 Báo Cáo Hiệu Quả Quản Trị Vốn")
+    if not df_history.empty:
+        # Chuyển đổi định dạng ngày tháng để gom nhóm
+        rep_df = df_history.copy()
+        rep_df['dt'] = pd.to_datetime(rep_df['trade_date'], format='%d/%m/%Y', errors='coerce')
+        rep_df = rep_df.sort_values(by="id")
 
-    if st.button("🚪 Đăng Xuất", use_container_width=True):
-        st.session_state.authenticated = False
-        st.rerun()
+        # 1. Báo cáo theo Ngày
+        st.markdown("#### 📅 1. Báo Cáo Theo Ngày")
+        day_summary = rep_df.groupby('trade_date').agg(
+            Tổng_Lệnh=('id', 'count'),
+            Số_Win=('result', lambda x: (x == 'WIN').sum()),
+            Số_Lose=('result', lambda x: (x == 'LOSE').sum()),
+            Tổng_PnL=('pnl', 'sum'),
+            Vốn_Cuối=('ending_balance', 'last')
+        ).reset_index()
+        day_summary['Tỷ Lệ Win'] = (day_summary['Số_Win'] / day_summary['Tổng_Lệnh'] * 100).round(1).astype(str) + "%"
+        day_summary['Tổng_PnL'] = day_summary['Tổng_PnL'].apply(lambda x: f"${x:+,.2f}")
+        day_summary['Vốn_Cuối'] = day_summary['Vốn_Cuối'].apply(lambda x: f"${x:,.2f}")
+        st.dataframe(day_summary, use_container_width=True)
+
+        # 2. Báo cáo theo Phiên (Sáng, Trưa, Chiều, Tối)
+        st.markdown("#### 🕒 2. Báo Cáo Theo Phiên Trong Ngày")
+        sess_summary = rep_df.groupby('session_name').agg(
+            Số_Lệnh=('id', 'count'),
+            Tổng_Lãi_Lỗ=('pnl', 'sum')
+        ).reset_index()
+        sess_summary['Tổng_Lãi_Lỗ'] = sess_summary['Tổng_Lãi_Lỗ'].apply(lambda x: f"${x:+,.2f}")
+        st.dataframe(sess_summary, use_container_width=True)
+
+        # 3. Báo cáo theo Tuần & Tháng
+        st.markdown("#### 📈 3. Tổng Hợp Tuần & Tháng")
+        rep_df['year_week'] = rep_df['dt'].dt.strftime('%Y - Tuần %U')
+        rep_df['year_month'] = rep_df['dt'].dt.strftime('%m/%Y')
+        
+        col_w, col_m = st.columns(2)
+        with col_w:
+            st.caption("Theo Tuần:")
+            week_sum = rep_df.groupby('year_week')['pnl'].sum().reset_index()
+            week_sum.columns = ['Tuần', 'PnL ($)']
+            week_sum['PnL ($)'] = week_sum['PnL ($)'].apply(lambda x: f"${x:+,.2f}")
+            st.dataframe(week_sum, use_container_width=True)
+            
+        with col_m:
+            st.caption("Theo Tháng:")
+            month_sum = rep_df.groupby('year_month')['pnl'].sum().reset_index()
+            month_sum.columns = ['Tháng', 'PnL ($)']
+            month_sum['PnL ($)'] = month_sum['PnL ($)'].apply(lambda x: f"${x:+,.2f}")
+            st.dataframe(month_sum, use_container_width=True)
+    else:
+        st.info("Báo cáo sẽ tự động tổng hợp khi bạn bắt đầu có các lệnh cược.")
