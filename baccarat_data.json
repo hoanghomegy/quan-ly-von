@@ -1,11 +1,11 @@
 {
   "config": {
     "initial_cap": 200.0,
-    "current_cap": 209.5,
+    "current_cap": 199.5,
     "session_start_cap": 209.5,
     "curr_session_idx": 2,
     "curr_table_num": 2,
-    "table_orders_count": 0,
+    "table_orders_count": 1,
     "table_completed": 0
   },
   "history": [
@@ -23,6 +23,21 @@
       "result": "WIN",
       "pnl": 9.5,
       "ending_balance": 209.5
+    },
+    {
+      "trade_date": "17/09/2026",
+      "time_str": "10:17:24",
+      "session_name": "Phiên 2 (Trưa)",
+      "session_idx": 2,
+      "table_num": 2,
+      "order_in_session": 1,
+      "order_in_table": 1,
+      "strategy_desc": "5% Vốn Ban Đầu (Cơ Sở)",
+      "bet_side": "BANKER",
+      "bet_amount": 10.0,
+      "result": "LOSE",
+      "pnl": -10.0,
+      "ending_balance": 199.5
     }
   ]
 }
