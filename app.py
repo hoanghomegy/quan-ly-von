@@ -15,6 +15,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# Chuẩn múi giờ Việt Nam GMT+7
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 def get_vn_now():
@@ -23,7 +24,7 @@ def get_vn_now():
 MASTER_PIN = "6868"
 DATA_FILE_PATH = "baccarat_data.json"
 
-# --- CSS MOBILE CHỐNG GIẬT LAG & NỔI BẬT KHỐI CƯỢC ---
+# CSS Mobile chống giật lag & làm nổi bật khối cảnh báo
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
@@ -88,8 +89,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- CƠ CHẾ ĐỒNG BỘ GITHUB CHUẨN NHƯ APP KHO TÔN ---
+# --- CƠ CHẾ ĐỒNG BỘ GITHUB LƯU VĨNH VIỄN ---
 def get_default_data():
+    today_vn = get_vn_now().strftime("%d/%m/%Y")
     return {
         "config": {
             "initial_cap": 200.0,
@@ -98,13 +100,13 @@ def get_default_data():
             "curr_session_idx": 1,
             "curr_table_num": 1,
             "table_orders_count": 0,
-            "table_completed": 0
+            "table_completed": 0,
+            "last_active_date": today_vn
         },
         "history": []
     }
 
 def sync_read_data():
-    """Đọc dữ liệu từ GitHub Repo; nếu chưa có thì nạp cấu hình mặc định"""
     token = st.secrets.get("GITHUB_TOKEN", "")
     repo = st.secrets.get("REPO_NAME", "hoanghomegy/quan-ly-von")
     
@@ -120,7 +122,6 @@ def sync_read_data():
         except Exception:
             pass
             
-    # Dự phòng cục bộ nếu không có mạng
     if os.path.exists(DATA_FILE_PATH):
         try:
             with open(DATA_FILE_PATH, "r", encoding="utf-8") as f:
@@ -130,8 +131,6 @@ def sync_read_data():
     return get_default_data()
 
 def sync_write_data(data_obj):
-    """Ghi đè và tự động commit dữ liệu lên GitHub để lưu vĩnh viễn"""
-    # Ghi đè file cục bộ trước để giao diện cập nhật ngay lập tức
     with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(data_obj, f, ensure_ascii=False, indent=2)
 
@@ -176,9 +175,25 @@ if not st.session_state.is_auth:
             st.error("❌ Mã PIN không chính xác!")
     st.stop()
 
-# --- TẢI TRẠNG THÁI HỆ THỐNG ---
+# --- TẢI DỮ LIỆU & TỰ ĐỘNG CHUYỂN SANG NGÀY MỚI (GMT+7) ---
 full_data = sync_read_data()
 cfg = full_data["config"]
+
+today_vn_str = get_vn_now().strftime("%d/%m/%Y")
+last_date_recorded = cfg.get("last_active_date", today_vn_str)
+
+# NẾU PHÁT HIỆN BƯỚC SANG NGÀY MỚI (THEO GIỜ GMT+7):
+if today_vn_str != last_date_recorded:
+    cfg["last_active_date"] = today_vn_str
+    cfg["curr_session_idx"] = 1                   # Mở lại Phiên 1 (Sáng)
+    cfg["curr_table_num"] = 1                     # Đưa về Bàn 1
+    cfg["table_orders_count"] = 0                 # 0/2 lệnh bàn
+    cfg["table_completed"] = 0                    # Mở khóa bàn
+    cfg["session_start_cap"] = cfg["current_cap"] # Neo số dư đầu ngày cho Phiên 1
+    # TUYỆT ĐỐI GIỮ NGUYÊN initial_cap (Mốc vốn 5% KHÔNG đổi theo ngày, chỉ đổi khi +100% hoặc -50%)
+    full_data["config"] = cfg
+    sync_write_data(full_data)                    # Tự động commit lên GitHub
+
 df_history = pd.DataFrame(full_data.get("history", []))
 
 initial_capital = float(cfg['initial_cap'])
@@ -196,7 +211,7 @@ SESSION_MAP = {
     4: "Phiên 4 (Tối)"
 }
 
-# Bộ đệm đường cầu tạm thời trong phiên
+# Bộ đệm đường cầu
 if "inputs_raw" not in st.session_state:
     st.session_state.inputs_raw = []
 if "road_main" not in st.session_state:
@@ -230,7 +245,6 @@ def calc_big_eye_color(road, col_i, row_i):
         return None
 
 def predict_side_for_red():
-    """Dự đoán Player hay Banker để bảng phụ 1 ra hạt ĐỎ"""
     road = st.session_state.road_main
     if not road:
         return "BANKER"
@@ -257,12 +271,11 @@ def execute_reset_table(next_table_num):
     full_data["config"]["table_completed"] = 0
     sync_write_data(full_data)
 
-# --- THỐNG KÊ LỆNH TRONG PHIÊN ---
-today_str = get_vn_now().strftime("%d/%m/%Y")
+# --- THỐNG KÊ LỆNH TRONG PHIÊN CỦA NGÀY HÔM NAY ---
 if not df_history.empty:
     session_trades = df_history[
         (df_history['session_idx'] == curr_session) & 
-        (df_history['trade_date'] == today_str)
+        (df_history['trade_date'] == today_vn_str)
     ]
 else:
     session_trades = pd.DataFrame()
@@ -271,21 +284,21 @@ order_in_session_count = len(session_trades)
 session_profit = current_capital - session_start_cap
 session_profit_pct = (session_profit / session_start_cap) * 100 if session_start_cap > 0 else 0
 
-# --- KIỂM TRA ĐIỀU KIỆN STOP PHIÊN & KHÓA BÀN ---
+# --- KIỂM TRA ĐIỀU KIỆN DỪNG PHIÊN & KHÓA BÀN ---
 is_session_target_win = (session_profit_pct >= 4.75) or (session_profit >= initial_capital * 0.0475)
 is_session_target_lose = (session_profit <= -(session_start_cap * 0.50))
 is_session_locked = is_session_target_win or is_session_target_lose
 
-# Khóa bàn độc lập: Lệnh 1 của bàn thắng HOẶC đã đủ 2 lệnh
+# Khóa bàn độc lập: Thắng lệnh 1 hoặc đã cược đủ 2 lệnh
 is_table_locked = (table_completed == 1) or (orders_in_table >= 2)
 
-# --- HEADER VÀ ĐIỀU HƯỚNG ---
-st.markdown("<h3 style='margin-bottom:0px;'>🎯 Quản Trị Kỷ Luật Bản Thân</h3>", unsafe_allow_html=True)
+# --- GIAO DIỆN CHÍNH ---
+st.markdown(f"<h3 style='margin-bottom:0px;'>🎯 Quản Trị Kỷ Luật Bản Thân <span style='font-size:14px; color:#a1a1aa;'>({today_vn_str})</span></h3>", unsafe_allow_html=True)
 
 col_h1, col_h2 = st.columns([2, 1])
 with col_h1:
     selected_sess = st.selectbox(
-        "📅 Chọn Phiên Giao Dịch:",
+        "📅 Chọn Phiên Giao Dịch Trong Ngày:",
         options=[1, 2, 3, 4],
         format_func=lambda x: SESSION_MAP[x],
         index=curr_session - 1
@@ -311,7 +324,7 @@ c_m3, c_m4 = st.columns(2)
 c_m3.metric(f"LÃI/LỖ {SESSION_MAP[curr_session]}", f"${session_profit:+,.2f}", delta=f"{session_profit_pct:.2f}%")
 c_m4.metric("TARGET CHỐT (+4.75% ➔ 5%)", f"+${initial_capital * 0.05:,.2f}", delta="Cắt lỗ: -50%")
 
-# KHU VỰC CÀI ĐẶT & RESET TRẠNG THÁI
+# KHU VỰC CÀI ĐẶT & RESET
 with st.expander("⚡ Cài Đặt Vốn & Quản Lý Bàn"):
     ce1, ce2 = st.columns(2)
     custom_init = ce1.number_input("Sửa Vốn Gốc Cơ Sở ($):", value=initial_capital, step=50.0)
@@ -341,7 +354,7 @@ with st.expander("⚡ Cài Đặt Vốn & Quản Lý Bàn"):
         st.session_state.road_main = []
         st.session_state.road_bigeye = []
         st.session_state.list_bigeye = []
-        st.success("Đã reset app về trạng thái đầu tiên thành công!")
+        st.success("Đã reset app về trạng thái ban đầu!")
         st.rerun()
 
 # CẢNH BÁO STOP PHIÊN / KHÓA BÀN
@@ -413,9 +426,7 @@ with tab_game:
 
     st.write("---")
 
-    # =========================================================
-    # --- LOGIC QUẢN LÝ VỐN ĐỘC LẬP THEO PHIÊN ---
-    # =========================================================
+    # LOGIC QUẢN LÝ VỐN ĐỘC LẬP THEO PHIÊN (Luôn tính 5% từ initial_capital)
     base_bet = initial_capital * 0.05
     num_seeds = len(st.session_state.list_bigeye)
     predicted_choice = predict_side_for_red()
@@ -424,7 +435,6 @@ with tab_game:
     current_bet_amount = 0.0
     strategy_label = ""
 
-    # Đếm số lệnh WIN liên tiếp tính ngược từ lệnh gần nhất trong phiên
     consec_wins = 0
     if not session_trades.empty:
         for _, r in session_trades.iloc[::-1].iterrows():
@@ -433,11 +443,6 @@ with tab_game:
             else:
                 break
 
-    # Phân bổ mức cược:
-    # 1. Bắt đầu phiên hoặc sau lệnh THUA: đánh bằng tiền cơ sở (5%)
-    # 2. Lệnh trước WIN:
-    #    - Đang có đúng 1 WIN -> Lệnh sau GẤP ĐÔI (10%) để săn chuỗi 2 Win
-    #    - Đã đủ 2 WIN liên tiếp -> Quay về mốc cơ sở (5%) tiếp tục chu kỳ
     if order_in_session_count == 0:
         current_bet_amount = base_bet
         strategy_label = "5% Vốn Ban Đầu (Cơ Sở)"
@@ -454,9 +459,7 @@ with tab_game:
                 current_bet_amount = base_bet
                 strategy_label = "5% Vốn (Quay về cơ sở sau 2 Win)"
 
-    # =========================================================
-    # --- ĐIỀU KIỆN VÀO LỆNH ĐỘC LẬP TẠI BÀN ---
-    # =========================================================
+    # ĐIỀU KIỆN VÀO LỆNH TẠI BÀN
     if is_session_locked:
         st.markdown('<div class="box-signal-stop">🛑 PHIÊN ĐÃ HOÀN THÀNH HOẶC CẮT LỖ. ĐÃ KHÓA TOÀN BỘ LỆNH.</div>', unsafe_allow_html=True)
     elif is_table_locked:
@@ -506,7 +509,7 @@ with tab_game:
             new_current_cap = current_capital + pnl
             res_str = "WIN" if is_win else "LOSE"
 
-            # Tự động nâng / hạ mốc vốn ban đầu
+            # Tự động cập nhật mốc vốn gốc khi và chỉ khi +100% hoặc -50%
             new_initial_cap = initial_capital
             if new_current_cap >= 2.0 * initial_capital:
                 new_initial_cap = new_current_cap
@@ -516,14 +519,13 @@ with tab_game:
             new_table_orders = orders_in_table + 1
             new_session_orders = order_in_session_count + 1
 
-            # Khóa bàn độc lập:
+            # Khóa bàn độc lập
             table_done = 0
             if is_win and orders_in_table == 0:
-                table_done = 1  # Lệnh 1 của bàn win -> Dừng bàn ngay
+                table_done = 1  # Lệnh 1 win -> Khóa bàn
             elif new_table_orders >= 2:
-                table_done = 1  # Đủ 2 lệnh -> Dừng bàn ngay
+                table_done = 1  # Đủ 2 lệnh -> Khóa bàn
 
-            # Cập nhật đối tượng dữ liệu
             full_data["config"]["current_cap"] = new_current_cap
             full_data["config"]["initial_cap"] = new_initial_cap
             full_data["config"]["table_orders_count"] = new_table_orders
@@ -548,7 +550,6 @@ with tab_game:
                 full_data["history"] = []
             full_data["history"].append(new_record)
 
-            # Tự động commit và đẩy lên GitHub
             sync_write_data(full_data)
 
     with col_btn_p:
