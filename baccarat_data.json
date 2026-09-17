@@ -1,0 +1,28 @@
+{
+  "config": {
+    "initial_cap": 200.0,
+    "current_cap": 209.5,
+    "session_start_cap": 200.0,
+    "curr_session_idx": 1,
+    "curr_table_num": 1,
+    "table_orders_count": 1,
+    "table_completed": 1
+  },
+  "history": [
+    {
+      "trade_date": "17/09/2026",
+      "time_str": "10:16:46",
+      "session_name": "Phiên 1 (Sáng)",
+      "session_idx": 1,
+      "table_num": 1,
+      "order_in_session": 1,
+      "order_in_table": 1,
+      "strategy_desc": "5% Vốn Ban Đầu (Cơ Sở)",
+      "bet_side": "BANKER",
+      "bet_amount": 10.0,
+      "result": "WIN",
+      "pnl": 9.5,
+      "ending_balance": 209.5
+    }
+  ]
+}
