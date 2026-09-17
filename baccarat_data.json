@@ -2,11 +2,11 @@
   "config": {
     "initial_cap": 200.0,
     "current_cap": 257.0,
-    "session_start_cap": 238.0,
-    "curr_session_idx": 2,
+    "session_start_cap": 257.0,
+    "curr_session_idx": 3,
     "curr_table_num": 7,
-    "table_orders_count": 1,
-    "table_completed": 1
+    "table_orders_count": 0,
+    "table_completed": 0
   },
   "history": [
     {
