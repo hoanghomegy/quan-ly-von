@@ -3,10 +3,10 @@
     "initial_cap": 200.0,
     "current_cap": 306.0,
     "session_start_cap": 276.5,
-    "curr_session_idx": 3,
+    "curr_session_idx": 4,
     "curr_table_num": 13,
-    "table_orders_count": 1,
-    "table_completed": 1,
+    "table_orders_count": 0,
+    "table_completed": 0,
     "completed_sessions": [
       1,
       2,
@@ -15,7 +15,8 @@
     "session_start_caps": {
       "1": 276.5,
       "2": 286.0,
-      "3": 296.0
+      "3": 296.0,
+      "4": 306.0
     }
   },
   "history": [
