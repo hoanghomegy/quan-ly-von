@@ -6,7 +6,11 @@
     "curr_session_idx": 1,
     "curr_table_num": 10,
     "table_orders_count": 0,
-    "table_completed": 0
+    "table_completed": 0,
+    "completed_sessions": [],
+    "session_start_caps": {
+      "1": 276.5
+    }
   },
   "history": [
     {
