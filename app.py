@@ -96,12 +96,13 @@ def get_default_data():
         "config": {
             "initial_cap": 200.0,
             "current_cap": 200.0,
-            "session_start_cap": 200.0,
             "curr_session_idx": 1,
             "curr_table_num": 1,
             "table_orders_count": 0,
             "table_completed": 0,
-            "last_active_date": today_vn
+            "last_active_date": today_vn,
+            "completed_sessions": [],       # Danh sách các phiên đã chốt khóa trong ngày
+            "session_start_caps": {}        # Lưu vốn neo bắt đầu của từng phiên { "1": 200.0, ... }
         },
         "history": []
     }
@@ -182,23 +183,28 @@ cfg = full_data["config"]
 today_vn_str = get_vn_now().strftime("%d/%m/%Y")
 last_date_recorded = cfg.get("last_active_date", today_vn_str)
 
-# NẾU PHÁT HIỆN BƯỚC SANG NGÀY MỚI (THEO GIỜ GMT+7):
+# NẾU PHÁT HIỆN BƯỚC SANG NGÀY MỚI THEO GIỜ GMT+7:
 if today_vn_str != last_date_recorded:
     cfg["last_active_date"] = today_vn_str
     cfg["curr_session_idx"] = 1                   # Mở lại Phiên 1 (Sáng)
     cfg["curr_table_num"] = 1                     # Đưa về Bàn 1
     cfg["table_orders_count"] = 0                 # 0/2 lệnh bàn
     cfg["table_completed"] = 0                    # Mở khóa bàn
-    cfg["session_start_cap"] = cfg["current_cap"] # Neo số dư đầu ngày cho Phiên 1
-    # TUYỆT ĐỐI GIỮ NGUYÊN initial_cap (Mốc vốn 5% KHÔNG đổi theo ngày, chỉ đổi khi +100% hoặc -50%)
+    cfg["completed_sessions"] = []                # Mở khóa toàn bộ 4 phiên cho ngày mới
+    cfg["session_start_caps"] = { "1": cfg["current_cap"] }  # Neo vốn đầu ngày cho Phiên 1
     full_data["config"] = cfg
-    sync_write_data(full_data)                    # Tự động commit lên GitHub
+    sync_write_data(full_data)
+
+# Đảm bảo các cấu trúc mới luôn tồn tại
+if "completed_sessions" not in cfg:
+    cfg["completed_sessions"] = []
+if "session_start_caps" not in cfg:
+    cfg["session_start_caps"] = {}
 
 df_history = pd.DataFrame(full_data.get("history", []))
 
 initial_capital = float(cfg['initial_cap'])
 current_capital = float(cfg['current_cap'])
-session_start_cap = float(cfg['session_start_cap'])
 curr_session = int(cfg['curr_session_idx'])
 curr_table = int(cfg['curr_table_num'])
 orders_in_table = int(cfg['table_orders_count'])
@@ -271,7 +277,7 @@ def execute_reset_table(next_table_num):
     full_data["config"]["table_completed"] = 0
     sync_write_data(full_data)
 
-# --- THỐNG KÊ LỆNH TRONG PHIÊN CỦA NGÀY HÔM NAY ---
+# --- THỐNG KÊ LỆNH TRONG PHIÊN ĐANG CHỌN CỦA HÔM NAY ---
 if not df_history.empty:
     session_trades = df_history[
         (df_history['session_idx'] == curr_session) & 
@@ -281,31 +287,54 @@ else:
     session_trades = pd.DataFrame()
 
 order_in_session_count = len(session_trades)
-session_profit = current_capital - session_start_cap
-session_profit_pct = (session_profit / session_start_cap) * 100 if session_start_cap > 0 else 0
 
-# --- KIỂM TRA ĐIỀU KIỆN DỪNG PHIÊN & KHÓA BÀN ---
-is_session_target_win = (session_profit_pct >= 4.75) or (session_profit >= initial_capital * 0.0475)
-is_session_target_lose = (session_profit <= -(session_start_cap * 0.50))
-is_session_locked = is_session_target_win or is_session_target_lose
+# Neo mốc vốn bắt đầu của phiên này (không bị ghi đè nếu phiên đã từng mở hoặc đã xong)
+s_key = str(curr_session)
+if s_key not in cfg["session_start_caps"]:
+    cfg["session_start_caps"][s_key] = current_capital
+    full_data["config"] = cfg
+    sync_write_data(full_data)
 
-# Khóa bàn độc lập: Thắng lệnh 1 hoặc đã cược đủ 2 lệnh
+session_start_cap = float(cfg["session_start_caps"][s_key])
+session_pnl_calc = session_trades['pnl'].sum() if not session_trades.empty else 0.0
+session_profit_pct = (session_pnl_calc / session_start_cap) * 100 if session_start_cap > 0 else 0
+
+# --- KIỂM TRA ĐIỀU KIỆN STOP & KHÓA VĨNH VIỄN TRONG NGÀY ---
+is_already_completed = curr_session in cfg.get("completed_sessions", [])
+is_session_target_win = (session_profit_pct >= 4.75) or (session_pnl_calc >= initial_capital * 0.0475)
+is_session_target_lose = (session_pnl_calc <= -(session_start_cap * 0.50))
+
+# Nếu phiên đạt target thắng hoặc thua mà chưa ghi nhận -> Khóa và lưu vĩnh viễn vào completed_sessions
+if (is_session_target_win or is_session_target_lose) and not is_already_completed:
+    cfg["completed_sessions"].append(curr_session)
+    full_data["config"] = cfg
+    sync_write_data(full_data)
+    is_already_completed = True
+
+is_session_locked = is_already_completed
 is_table_locked = (table_completed == 1) or (orders_in_table >= 2)
 
 # --- GIAO DIỆN CHÍNH ---
 st.markdown(f"<h3 style='margin-bottom:0px;'>🎯 Quản Trị Kỷ Luật Bản Thân <span style='font-size:14px; color:#a1a1aa;'>({today_vn_str})</span></h3>", unsafe_allow_html=True)
+
+# Dropdown chọn phiên (Hiển thị nhãn [ĐÃ KHÓA] trực quan)
+def format_session_label(s_idx):
+    status = " [🔒 ĐÃ XONG]" if s_idx in cfg.get("completed_sessions", []) else ""
+    return f"{SESSION_MAP[s_idx]}{status}"
 
 col_h1, col_h2 = st.columns([2, 1])
 with col_h1:
     selected_sess = st.selectbox(
         "📅 Chọn Phiên Giao Dịch Trong Ngày:",
         options=[1, 2, 3, 4],
-        format_func=lambda x: SESSION_MAP[x],
+        format_func=format_session_label,
         index=curr_session - 1
     )
     if selected_sess != curr_session:
         full_data["config"]["curr_session_idx"] = selected_sess
-        full_data["config"]["session_start_cap"] = current_capital
+        # Nếu phiên mới chưa có mốc vốn neo, lưu mốc vốn hiện tại:
+        if str(selected_sess) not in full_data["config"]["session_start_caps"]:
+            full_data["config"]["session_start_caps"][str(selected_sess)] = current_capital
         full_data["config"]["table_orders_count"] = 0
         full_data["config"]["table_completed"] = 0
         sync_write_data(full_data)
@@ -321,7 +350,7 @@ c_m1.metric("VỐN THỰC TẾ", f"${current_capital:,.2f}", delta=f"${current_c
 c_m2.metric("VỐN BAN ĐẦU (GỐC 5%)", f"${initial_capital:,.2f}")
 
 c_m3, c_m4 = st.columns(2)
-c_m3.metric(f"LÃI/LỖ {SESSION_MAP[curr_session]}", f"${session_profit:+,.2f}", delta=f"{session_profit_pct:.2f}%")
+c_m3.metric(f"LÃI/LỖ {SESSION_MAP[curr_session]}", f"${session_pnl_calc:+,.2f}", delta=f"{session_profit_pct:.2f}%")
 c_m4.metric("TARGET CHỐT (+4.75% ➔ 5%)", f"+${initial_capital * 0.05:,.2f}", delta="Cắt lỗ: -50%")
 
 # KHU VỰC CÀI ĐẶT & RESET
@@ -334,7 +363,6 @@ with st.expander("⚡ Cài Đặt Vốn & Quản Lý Bàn"):
     if cb1.button("💾 Lưu Cập Nhật Vốn", use_container_width=True):
         full_data["config"]["initial_cap"] = custom_init
         full_data["config"]["current_cap"] = custom_curr
-        full_data["config"]["session_start_cap"] = custom_curr
         sync_write_data(full_data)
         st.rerun()
     if cb2.button("🔄 ĐỔI BÀN MỚI (XÓA CẦU)", use_container_width=True):
@@ -348,7 +376,7 @@ with st.expander("⚡ Cài Đặt Vốn & Quản Lý Bàn"):
         full_data = get_default_data()
         full_data["config"]["initial_cap"] = reset_val
         full_data["config"]["current_cap"] = reset_val
-        full_data["config"]["session_start_cap"] = reset_val
+        full_data["config"]["session_start_caps"] = { "1": reset_val }
         sync_write_data(full_data)
         st.session_state.inputs_raw = []
         st.session_state.road_main = []
@@ -357,19 +385,12 @@ with st.expander("⚡ Cài Đặt Vốn & Quản Lý Bàn"):
         st.success("Đã reset app về trạng thái ban đầu!")
         st.rerun()
 
-# CẢNH BÁO STOP PHIÊN / KHÓA BÀN
-if is_session_target_win:
+# THÔNG BÁO KHÓA CỨNG PHIÊN ĐÃ XONG
+if is_session_locked:
     st.markdown("""
         <div class="box-signal-stop">
-            🛑 KỶ LUẬT THÉP: ĐÃ ĐẠT TARGET (+4.75% ➔ +5%)!<br>
-            BẮT BUỘC STOP - KHÓA PHIÊN NGAY LẬP TỨC. HÃY TẮT APP VÀ NGHỈ NGƠI!
-        </div>
-    """, unsafe_allow_html=True)
-elif is_session_target_lose:
-    st.markdown("""
-        <div class="box-signal-stop">
-            🛑 BẢO VỆ TÀI KHOẢN: ĐÃ CHẠM MỨC CẮT LỖ (-50%)!<br>
-            BẮT BUỘC KHÓA PHIÊN. KHÔNG ĐƯỢC GỠ!
+            🛑 KỶ LUẬT THÉP: PHIÊN NÀY ĐÃ HOÀN THÀNH VÀ CHỐT KHÓA TRONG NGÀY!<br>
+            BẮT BUỘC ĐỢI QUA 00:00 (GMT+7) NGÀY HÔM SAU ĐỂ MỞ LẠI. HÃY NGHỈ NGƠI HOẶC CHỌN PHIÊN KHÁC CHƯA CHƠI!
         </div>
     """, unsafe_allow_html=True)
 elif is_table_locked:
@@ -426,7 +447,7 @@ with tab_game:
 
     st.write("---")
 
-    # LOGIC QUẢN LÝ VỐN ĐỘC LẬP THEO PHIÊN (Luôn tính 5% từ initial_capital)
+    # LOGIC QUẢN LÝ VỐN ĐỘC LẬP THEO PHIÊN
     base_bet = initial_capital * 0.05
     num_seeds = len(st.session_state.list_bigeye)
     predicted_choice = predict_side_for_red()
@@ -461,7 +482,7 @@ with tab_game:
 
     # ĐIỀU KIỆN VÀO LỆNH TẠI BÀN
     if is_session_locked:
-        st.markdown('<div class="box-signal-stop">🛑 PHIÊN ĐÃ HOÀN THÀNH HOẶC CẮT LỖ. ĐÃ KHÓA TOÀN BỘ LỆNH.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="box-signal-stop">🛑 PHIÊN ĐÃ HOÀN THÀNH. KHÓA CỨNG TOÀN BỘ NÚT ĐẶT LỆNH.</div>', unsafe_allow_html=True)
     elif is_table_locked:
         st.markdown('<div class="box-signal-table-lock">🛑 BÀN ĐÃ HẾT LƯỢT ĐÁNH (WIN LỆNH 1 HOẶC ĐỦ 2 LỆNH)!<br>HÃY BẤM "🔄 ĐỔI BÀN MỚI" Ở TRÊN ĐỂ TIẾP TỤC.</div>', unsafe_allow_html=True)
     elif num_seeds == 0:
@@ -525,6 +546,16 @@ with tab_game:
                 table_done = 1  # Lệnh 1 win -> Khóa bàn
             elif new_table_orders >= 2:
                 table_done = 1  # Đủ 2 lệnh -> Khóa bàn
+
+            # Kiểm tra xem sau lệnh này phiên có đạt target thắng/thua để khóa vĩnh viễn không
+            cur_pnl_after = session_pnl_calc + pnl
+            cur_pct_after = (cur_pnl_after / session_start_cap) * 100 if session_start_cap > 0 else 0
+            is_win_stop = (cur_pct_after >= 4.75) or (cur_pnl_after >= initial_capital * 0.0475)
+            is_lose_stop = (cur_pnl_after <= -(session_start_cap * 0.50))
+            
+            if is_win_stop or is_lose_stop:
+                if curr_session not in full_data["config"]["completed_sessions"]:
+                    full_data["config"]["completed_sessions"].append(curr_session)
 
             full_data["config"]["current_cap"] = new_current_cap
             full_data["config"]["initial_cap"] = new_initial_cap
