@@ -1,16 +1,17 @@
 {
   "config": {
     "initial_cap": 200.0,
-    "current_cap": 306.0,
+    "current_cap": 316.0,
     "session_start_cap": 276.5,
     "curr_session_idx": 4,
     "curr_table_num": 14,
-    "table_orders_count": 0,
-    "table_completed": 0,
+    "table_orders_count": 1,
+    "table_completed": 1,
     "completed_sessions": [
       1,
       2,
-      3
+      3,
+      4
     ],
     "session_start_caps": {
       "1": 276.5,
@@ -229,6 +230,21 @@
       "result": "WIN",
       "pnl": 10.0,
       "ending_balance": 306.0
+    },
+    {
+      "trade_date": "18/09/2026",
+      "time_str": "08:16:38",
+      "session_name": "Phiên 4 (Tối)",
+      "session_idx": 4,
+      "table_num": 14,
+      "order_in_session": 1,
+      "order_in_table": 1,
+      "strategy_desc": "5% Vốn Ban Đầu (Cơ Sở)",
+      "bet_side": "PLAYER",
+      "bet_amount": 10.0,
+      "result": "WIN",
+      "pnl": 10.0,
+      "ending_balance": 316.0
     }
   ]
 }
