@@ -2,16 +2,17 @@
   "config": {
     "initial_cap": 150.0,
     "current_cap": 163.125,
-    "curr_session_idx": 1,
+    "curr_session_idx": 2,
     "curr_table_num": 7,
-    "table_orders_count": 1,
-    "table_completed": 1,
+    "table_orders_count": 0,
+    "table_completed": 0,
     "last_active_date": "20/09/2026",
     "completed_sessions": [
       1
     ],
     "session_start_caps": {
-      "1": 150.0
+      "1": 150.0,
+      "2": 163.125
     }
   },
   "history": [
