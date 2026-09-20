@@ -1,7 +1,7 @@
 {
   "config": {
     "initial_cap": 150.0,
-    "current_cap": 101.25,
+    "current_cap": 190.0,
     "curr_session_idx": 3,
     "curr_table_num": 23,
     "table_orders_count": 2,
