@@ -1,10 +1,10 @@
 {
   "config": {
     "initial_cap": 150.0,
-    "current_cap": 150.0,
+    "current_cap": 142.5,
     "curr_session_idx": 1,
     "curr_table_num": 2,
-    "table_orders_count": 0,
+    "table_orders_count": 1,
     "table_completed": 0,
     "last_active_date": "20/09/2026",
     "completed_sessions": [],
@@ -12,5 +12,21 @@
       "1": 150.0
     }
   },
-  "history": []
+  "history": [
+    {
+      "trade_date": "20/09/2026",
+      "time_str": "15:31:46",
+      "session_name": "Phiên 1 (Sáng)",
+      "session_idx": 1,
+      "table_num": 2,
+      "order_in_session": 1,
+      "order_in_table": 1,
+      "strategy_desc": "5% Vốn Ban Đầu (Cơ Sở)",
+      "bet_side": "BANKER",
+      "bet_amount": 7.5,
+      "result": "LOSE",
+      "pnl": -7.5,
+      "ending_balance": 142.5
+    }
+  ]
 }
