@@ -1,11 +1,11 @@
 {
   "config": {
     "initial_cap": 150.0,
-    "current_cap": 127.5,
+    "current_cap": 134.625,
     "curr_session_idx": 1,
     "curr_table_num": 4,
-    "table_orders_count": 1,
-    "table_completed": 0,
+    "table_orders_count": 2,
+    "table_completed": 1,
     "last_active_date": "20/09/2026",
     "completed_sessions": [],
     "session_start_caps": {
@@ -57,6 +57,21 @@
       "result": "LOSE",
       "pnl": -7.5,
       "ending_balance": 127.5
+    },
+    {
+      "trade_date": "20/09/2026",
+      "time_str": "15:34:27",
+      "session_name": "Phiên 1 (Sáng)",
+      "session_idx": 1,
+      "table_num": 4,
+      "order_in_session": 4,
+      "order_in_table": 2,
+      "strategy_desc": "5% Vốn (Sau Thua - Đánh bằng tiền)",
+      "bet_side": "BANKER",
+      "bet_amount": 7.5,
+      "result": "WIN",
+      "pnl": 7.125,
+      "ending_balance": 134.625
     }
   ]
 }
