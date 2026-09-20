@@ -1,10 +1,10 @@
 {
   "config": {
     "initial_cap": 150.0,
-    "current_cap": 155.25,
+    "current_cap": 140.25,
     "curr_session_idx": 2,
     "curr_table_num": 11,
-    "table_orders_count": 0,
+    "table_orders_count": 1,
     "table_completed": 0,
     "last_active_date": "20/09/2026",
     "completed_sessions": [
@@ -165,6 +165,21 @@
       "result": "WIN",
       "pnl": 7.125,
       "ending_balance": 155.25
+    },
+    {
+      "trade_date": "20/09/2026",
+      "time_str": "16:56:44",
+      "session_name": "Phiên 2 (Trưa)",
+      "session_idx": 2,
+      "table_num": 11,
+      "order_in_session": 4,
+      "order_in_table": 1,
+      "strategy_desc": "10% (Gấp Đôi sau 1 Win - Săn chuỗi 2 WIN)",
+      "bet_side": "PLAYER",
+      "bet_amount": 15.0,
+      "result": "LOSE",
+      "pnl": -15.0,
+      "ending_balance": 140.25
     }
   ]
 }
