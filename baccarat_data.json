@@ -1,10 +1,10 @@
 {
   "config": {
     "initial_cap": 150.0,
-    "current_cap": 139.5,
+    "current_cap": 124.5,
     "curr_session_idx": 3,
     "curr_table_num": 20,
-    "table_orders_count": 0,
+    "table_orders_count": 1,
     "table_completed": 0,
     "last_active_date": "20/09/2026",
     "completed_sessions": [
@@ -377,6 +377,21 @@
       "result": "WIN",
       "pnl": 7.5,
       "ending_balance": 139.5
+    },
+    {
+      "trade_date": "20/09/2026",
+      "time_str": "19:32:10",
+      "session_name": "Phiên 3 (Chiều)",
+      "session_idx": 3,
+      "table_num": 20,
+      "order_in_session": 9,
+      "order_in_table": 1,
+      "strategy_desc": "10% (Gấp Đôi sau 1 Win - Săn chuỗi 2 WIN)",
+      "bet_side": "PLAYER",
+      "bet_amount": 15.0,
+      "result": "LOSE",
+      "pnl": -15.0,
+      "ending_balance": 124.5
     }
   ]
 }
