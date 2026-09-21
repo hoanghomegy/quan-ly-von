@@ -6,6 +6,7 @@ import json
 import base64
 import requests
 import os
+import threading
 
 # --- CẤU HÌNH HỆ THỐNG ---
 st.set_page_config(
@@ -24,7 +25,7 @@ def get_vn_now():
 MASTER_PIN = "6868"
 DATA_FILE_PATH = "baccarat_data.json"
 
-# CSS Mobile chống giật lag & làm nổi bật khối cảnh báo
+# CSS Mobile siêu mượt, loại bỏ độ trễ, tối ưu hiển thị
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
@@ -86,10 +87,38 @@ st.markdown("""
         margin: 10px 0;
         border: 2px solid #fb923c;
     }
+    /* Style bảng cầu nhẹ không cần iframe */
+    .board-container {
+        background: #121214;
+        overflow-x: auto;
+        white-space: nowrap;
+        width: 100%;
+        border: 1px solid #333;
+        border-radius: 6px;
+        padding: 4px;
+        margin-bottom: 8px;
+    }
+    .board-table {
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+    .board-th {
+        width: 20px; min-width: 20px; height: 16px;
+        border: 1px solid #2d2d30;
+        font-size: 9px; color: #71717a; text-align: center; background: #18181b;
+    }
+    .board-td {
+        width: 20px; min-width: 20px; height: 20px;
+        border: 1px solid #27272a; text-align: center; vertical-align: middle; padding: 0;
+    }
+    .dot-b { width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid #dc2626; margin: auto; }
+    .dot-p { width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid #2563eb; margin: auto; }
+    .dot-er { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #dc2626; margin: auto; }
+    .dot-eb { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #2563eb; margin: auto; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- CƠ CHẾ ĐỒNG BỘ GITHUB LƯU VĨNH VIỄN ---
+# --- CƠ CHẾ LƯU DỮ LIỆU ĐỒNG BỘ CHẠY NGẦM KHÔNG GIẬT LAG ---
 def get_default_data():
     today_vn = get_vn_now().strftime("%d/%m/%Y")
     return {
@@ -101,39 +130,20 @@ def get_default_data():
             "table_orders_count": 0,
             "table_completed": 0,
             "last_active_date": today_vn,
-            "completed_sessions": [],       # Danh sách các phiên đã chốt khóa trong ngày
-            "session_start_caps": {}        # Lưu vốn neo bắt đầu của từng phiên { "1": 200.0, ... }
+            "completed_sessions": [],
+            "session_start_caps": {}
         },
         "history": []
     }
 
 def sync_read_data():
-    token = st.secrets.get("GITHUB_TOKEN", "")
-    repo = st.secrets.get("REPO_NAME", "hoanghomegy/quan-ly-von")
-    
-    if token and repo:
-        url = f"https://api.github.com/repos/{repo}/contents/{DATA_FILE_PATH}"
-        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
-        try:
-            r = requests.get(url, headers=headers, timeout=5)
-            if r.status_code == 200:
-                content_b64 = r.json().get("content", "")
-                decoded = base64.b64decode(content_b64).decode("utf-8")
-                return json.loads(decoded)
-        except Exception:
-            pass
-            
+    # Ưu tiên đọc file nội bộ để mở app tức thì
     if os.path.exists(DATA_FILE_PATH):
         try:
             with open(DATA_FILE_PATH, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             pass
-    return get_default_data()
-
-def sync_write_data(data_obj):
-    with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
-        json.dump(data_obj, f, ensure_ascii=False, indent=2)
 
     token = st.secrets.get("GITHUB_TOKEN", "")
     repo = st.secrets.get("REPO_NAME", "hoanghomegy/quan-ly-von")
@@ -142,24 +152,54 @@ def sync_write_data(data_obj):
         url = f"https://api.github.com/repos/{repo}/contents/{DATA_FILE_PATH}"
         headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
         try:
-            sha = None
-            r_get = requests.get(url, headers=headers, timeout=5)
-            if r_get.status_code == 200:
-                sha = r_get.json().get("sha")
-
-            json_str = json.dumps(data_obj, ensure_ascii=False, indent=2)
-            content_b64 = base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
-
-            payload = {
-                "message": f"Update system data: {get_vn_now().strftime('%H:%M:%S %d/%m')}",
-                "content": content_b64
-            }
-            if sha:
-                payload["sha"] = sha
-
-            requests.put(url, headers=headers, json=payload, timeout=5)
+            r = requests.get(url, headers=headers, timeout=4)
+            if r.status_code == 200:
+                content_b64 = r.json().get("content", "")
+                decoded = base64.b64decode(content_b64).decode("utf-8")
+                data = json.loads(decoded)
+                with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                return data
         except Exception:
             pass
+            
+    return get_default_data()
+
+def _push_github_background(token, repo, data_obj):
+    """Hàm chạy ngầm đẩy lên GitHub không chặn giao diện"""
+    url = f"https://api.github.com/repos/{repo}/contents/{DATA_FILE_PATH}"
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+    try:
+        sha = None
+        r_get = requests.get(url, headers=headers, timeout=5)
+        if r_get.status_code == 200:
+            sha = r_get.json().get("sha")
+
+        json_str = json.dumps(data_obj, ensure_ascii=False, indent=2)
+        content_b64 = base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
+
+        payload = {
+            "message": f"Auto-sync trade: {get_vn_now().strftime('%H:%M:%S %d/%m')}",
+            "content": content_b64
+        }
+        if sha:
+            payload["sha"] = sha
+
+        requests.put(url, headers=headers, json=payload, timeout=5)
+    except Exception:
+        pass
+
+def sync_write_data(data_obj):
+    # 1. Ghi ngay vào file cục bộ cực nhanh (0ms)
+    with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
+        json.dump(data_obj, f, ensure_ascii=False, indent=2)
+
+    # 2. Đẩy lên GitHub trong luồng riêng ngầm để không bị giật lag
+    token = st.secrets.get("GITHUB_TOKEN", "")
+    repo = st.secrets.get("REPO_NAME", "hoanghomegy/quan-ly-von")
+    if token and repo:
+        t = threading.Thread(target=_push_github_background, args=(token, repo, data_obj))
+        t.start()
 
 # --- BẢO MẬT MÃ PIN ---
 if "is_auth" not in st.session_state:
@@ -183,19 +223,17 @@ cfg = full_data["config"]
 today_vn_str = get_vn_now().strftime("%d/%m/%Y")
 last_date_recorded = cfg.get("last_active_date", today_vn_str)
 
-# NẾU PHÁT HIỆN BƯỚC SANG NGÀY MỚI THEO GIỜ GMT+7:
 if today_vn_str != last_date_recorded:
     cfg["last_active_date"] = today_vn_str
-    cfg["curr_session_idx"] = 1                   # Mở lại Phiên 1 (Sáng)
-    cfg["curr_table_num"] = 1                     # Đưa về Bàn 1
-    cfg["table_orders_count"] = 0                 # 0/2 lệnh bàn
-    cfg["table_completed"] = 0                    # Mở khóa bàn
-    cfg["completed_sessions"] = []                # Mở khóa toàn bộ 4 phiên cho ngày mới
-    cfg["session_start_caps"] = { "1": cfg["current_cap"] }  # Neo vốn đầu ngày cho Phiên 1
+    cfg["curr_session_idx"] = 1
+    cfg["curr_table_num"] = 1
+    cfg["table_orders_count"] = 0
+    cfg["table_completed"] = 0
+    cfg["completed_sessions"] = []
+    cfg["session_start_caps"] = { "1": cfg["current_cap"] }
     full_data["config"] = cfg
     sync_write_data(full_data)
 
-# Đảm bảo các cấu trúc mới luôn tồn tại
 if "completed_sessions" not in cfg:
     cfg["completed_sessions"] = []
 if "session_start_caps" not in cfg:
@@ -277,7 +315,7 @@ def execute_reset_table(next_table_num):
     full_data["config"]["table_completed"] = 0
     sync_write_data(full_data)
 
-# --- THỐNG KÊ LỆNH TRONG PHIÊN ĐANG CHỌN CỦA HÔM NAY ---
+# --- THỐNG KÊ PHIÊN ĐANG CHỌN TRONG NGÀY ---
 if not df_history.empty:
     session_trades = df_history[
         (df_history['session_idx'] == curr_session) & 
@@ -288,7 +326,6 @@ else:
 
 order_in_session_count = len(session_trades)
 
-# Neo mốc vốn bắt đầu của phiên này (không bị ghi đè nếu phiên đã từng mở hoặc đã xong)
 s_key = str(curr_session)
 if s_key not in cfg["session_start_caps"]:
     cfg["session_start_caps"][s_key] = current_capital
@@ -299,12 +336,11 @@ session_start_cap = float(cfg["session_start_caps"][s_key])
 session_pnl_calc = session_trades['pnl'].sum() if not session_trades.empty else 0.0
 session_profit_pct = (session_pnl_calc / session_start_cap) * 100 if session_start_cap > 0 else 0
 
-# --- KIỂM TRA ĐIỀU KIỆN STOP & KHÓA VĨNH VIỄN TRONG NGÀY ---
+# --- KIỂM TRA ĐIỀU KIỆN STOP & KHÓA PHIÊN ---
 is_already_completed = curr_session in cfg.get("completed_sessions", [])
 is_session_target_win = (session_profit_pct >= 4.75) or (session_pnl_calc >= initial_capital * 0.0475)
 is_session_target_lose = (session_pnl_calc <= -(session_start_cap * 0.50))
 
-# Nếu phiên đạt target thắng hoặc thua mà chưa ghi nhận -> Khóa và lưu vĩnh viễn vào completed_sessions
 if (is_session_target_win or is_session_target_lose) and not is_already_completed:
     cfg["completed_sessions"].append(curr_session)
     full_data["config"] = cfg
@@ -312,12 +348,17 @@ if (is_session_target_win or is_session_target_lose) and not is_already_complete
     is_already_completed = True
 
 is_session_locked = is_already_completed
-is_table_locked = (table_completed == 1) or (orders_in_table >= 2)
 
-# --- GIAO DIỆN CHÍNH ---
+# =========================================================================
+# --- CẢI TIẾN LOGIC ĐIỀU KIỆN VÀO LỆNH TẠI BÀN (HẠT ĐỎ MỚI ĐÁNH) ---
+# =========================================================================
+first_seed_is_blue = (len(st.session_state.list_bigeye) > 0 and st.session_state.list_bigeye[0] == "BLUE")
+# Nếu hạt đầu tiên là BLUE: Bàn bị phế, khóa bàn bắt đổi bàn mới ngay!
+is_table_locked = (table_completed == 1) or (orders_in_table >= 2) or first_seed_is_blue
+
+# --- GIAO DIỆN HEADER ---
 st.markdown(f"<h3 style='margin-bottom:0px;'>🎯 Quản Trị Kỷ Luật Bản Thân <span style='font-size:14px; color:#a1a1aa;'>({today_vn_str})</span></h3>", unsafe_allow_html=True)
 
-# Dropdown chọn phiên (Hiển thị nhãn [ĐÃ KHÓA] trực quan)
 def format_session_label(s_idx):
     status = " [🔒 ĐÃ XONG]" if s_idx in cfg.get("completed_sessions", []) else ""
     return f"{SESSION_MAP[s_idx]}{status}"
@@ -332,7 +373,6 @@ with col_h1:
     )
     if selected_sess != curr_session:
         full_data["config"]["curr_session_idx"] = selected_sess
-        # Nếu phiên mới chưa có mốc vốn neo, lưu mốc vốn hiện tại:
         if str(selected_sess) not in full_data["config"]["session_start_caps"]:
             full_data["config"]["session_start_caps"][str(selected_sess)] = current_capital
         full_data["config"]["table_orders_count"] = 0
@@ -385,12 +425,19 @@ with st.expander("⚡ Cài Đặt Vốn & Quản Lý Bàn"):
         st.success("Đã reset app về trạng thái ban đầu!")
         st.rerun()
 
-# THÔNG BÁO KHÓA CỨNG PHIÊN ĐÃ XONG
+# THÔNG BÁO CẢNH BÁO STOP / KHÓA BÀN
 if is_session_locked:
     st.markdown("""
         <div class="box-signal-stop">
             🛑 KỶ LUẬT THÉP: PHIÊN NÀY ĐÃ HOÀN THÀNH VÀ CHỐT KHÓA TRONG NGÀY!<br>
             BẮT BUỘC ĐỢI QUA 00:00 (GMT+7) NGÀY HÔM SAU ĐỂ MỞ LẠI. HÃY NGHỈ NGƠI HOẶC CHỌN PHIÊN KHÁC CHƯA CHƠI!
+        </div>
+    """, unsafe_allow_html=True)
+elif first_seed_is_blue:
+    st.markdown("""
+        <div class="box-signal-table-lock">
+            ⚠️ HẠT ĐẦU TIÊN BẢNG PHỤ 1 LÀ MÀU XANH ➔ KHÔNG ĐỦ ĐIỀU KIỆN VÀO LỆNH!<br>
+            BẮT BUỘC BẤM "🔄 ĐỔI BÀN MỚI" Ở TRÊN ĐỂ TÌM BÀN KHÁC.
         </div>
     """, unsafe_allow_html=True)
 elif is_table_locked:
@@ -405,41 +452,33 @@ elif is_table_locked:
 tab_game, tab_history, tab_report = st.tabs(["🎮 BÀN ĐÁNH & VÀO LỆNH", "📜 LỊCH SỬ CƯỢC", "📊 BÁO CÁO NGÀY/TUẦN/THÁNG"])
 
 with tab_game:
-    def render_light_board(columns, is_big_eye=False):
-        total_cols = max(35, len(columns) + 3)
-        html = """<style>
-            .b-wrap { background: #121214; overflow-x: auto; white-space: nowrap; width: 100%; border: 1px solid #333; border-radius: 6px; padding: 2px; }
-            table { border-collapse: collapse; table-layout: fixed; }
-            th { width: 22px; min-width: 22px; height: 16px; border: 1px solid #2d2d30; font-size: 9px; color: #888; text-align: center; background: #1e1e24; }
-            td { width: 22px; min-width: 22px; height: 22px; border: 1px solid #222; text-align: center; vertical-align: middle; padding: 0; }
-            .c-b { width: 15px; height: 15px; border-radius: 50%; border: 2.5px solid #dc2626; margin: auto; }
-            .c-p { width: 15px; height: 15px; border-radius: 50%; border: 2.5px solid #2563eb; margin: auto; }
-            .e-r { width: 13px; height: 13px; border-radius: 50%; border: 2px solid #dc2626; margin: auto; }
-            .e-b { width: 13px; height: 13px; border-radius: 50%; border: 2px solid #2563eb; margin: auto; }
-        </style><div class="b-wrap"><table><thead><tr>"""
+    # Render bảng trực tiếp (nhẹ hơn và nhanh gấp 10 lần so với components.html)
+    def render_fast_board(columns, is_big_eye=False):
+        total_cols = max(30, len(columns) + 3)
+        html = '<div class="board-container"><table class="board-table"><thead><tr>'
         for c in range(1, total_cols + 1):
-            html += f"<th>{c}</th>"
-        html += "</tr></thead><tbody>"
+            html += f'<th class="board-th">{c}</th>'
+        html += '</tr></thead><tbody>'
         for r in range(6):
-            html += "<tr>"
+            html += '<tr>'
             for c in range(total_cols):
                 cell_div = ""
                 if c < len(columns) and r < len(columns[c]):
                     val = columns[c][r]
                     if not is_big_eye:
-                        cell_div = f'<div class="{"c-b" if val=="B" else "c-p"}"></div>'
+                        cell_div = f'<div class="{"dot-b" if val=="B" else "dot-p"}"></div>'
                     else:
-                        cell_div = f'<div class="{"e-r" if val=="RED" else "e-b"}"></div>'
-                html += f"<td>{cell_div}</td>"
-            html += "</tr>"
-        html += "</tbody></table></div>"
+                        cell_div = f'<div class="{"dot-er" if val=="RED" else "dot-eb"}"></div>'
+                html += f'<td class="board-td">{cell_div}</td>'
+            html += '</tr>'
+        html += '</tbody></table></div>'
         return html
 
     st.markdown("##### 🔴🔵 Bảng Chính (Big Road)")
-    st.components.v1.html(render_light_board(st.session_state.road_main, False), height=170, scrolling=True)
+    st.markdown(render_fast_board(st.session_state.road_main, False), unsafe_allow_html=True)
 
     st.markdown(f"##### 🔴🔵 Bảng Phụ 1 - Big Eye Boy ({len(st.session_state.list_bigeye)} hạt)")
-    st.components.v1.html(render_light_board(st.session_state.road_bigeye, True), height=170, scrolling=True)
+    st.markdown(render_fast_board(st.session_state.road_bigeye, True), unsafe_allow_html=True)
 
     if st.session_state.inputs_raw:
         tag_list = [f"<span style='color:{'#dc2626' if x=='B' else '#2563eb'}; font-weight:bold;'>{'🔴 B' if x=='B' else '🔵 P'}</span>" for x in st.session_state.inputs_raw]
@@ -480,14 +519,17 @@ with tab_game:
                 current_bet_amount = base_bet
                 strategy_label = "5% Vốn (Quay về cơ sở sau 2 Win)"
 
-    # ĐIỀU KIỆN VÀO LỆNH TẠI BÀN
+    # ĐIỀU KIỆN VÀO LỆNH TẠI BÀN (CHỈ VÀO KHI HẠT ĐẦU TIÊN LÀ ĐỎ)
     if is_session_locked:
         st.markdown('<div class="box-signal-stop">🛑 PHIÊN ĐÃ HOÀN THÀNH. KHÓA CỨNG TOÀN BỘ NÚT ĐẶT LỆNH.</div>', unsafe_allow_html=True)
+    elif first_seed_is_blue:
+        st.markdown('<div class="box-signal-table-lock">🛑 HẠT ĐẦU TIÊN LÀ XANH ➔ BỎ BÀN. BẤM "🔄 ĐỔI BÀN MỚI".</div>', unsafe_allow_html=True)
     elif is_table_locked:
         st.markdown('<div class="box-signal-table-lock">🛑 BÀN ĐÃ HẾT LƯỢT ĐÁNH (WIN LỆNH 1 HOẶC ĐỦ 2 LỆNH)!<br>HÃY BẤM "🔄 ĐỔI BÀN MỚI" Ở TRÊN ĐỂ TIẾP TỤC.</div>', unsafe_allow_html=True)
     elif num_seeds == 0:
-        st.markdown('<div class="box-signal-wait">⏳ Đang chờ Bảng phụ 1 xuất hiện hạt đầu tiên (Xanh/Đỏ) để kích hoạt lệnh...</div>', unsafe_allow_html=True)
+        st.markdown('<div class="box-signal-wait">⏳ Đang chờ Bảng phụ 1 xuất hiện hạt đầu tiên (phải là hạt ĐỎ mới đánh)...</div>', unsafe_allow_html=True)
     else:
+        # Hạt đầu tiên chắc chắn là RED -> Cho phép vào lệnh
         current_bet_side = predicted_choice
         if current_bet_side == "BANKER":
             st.markdown(f"""
@@ -520,6 +562,7 @@ with tab_game:
             st.session_state.list_bigeye.append(color)
             st.session_state.road_bigeye = append_road(st.session_state.road_bigeye, color)
 
+        # Chỉ tính cược nếu đủ điều kiện (hạt đầu tiên là RED và có tín hiệu vào lệnh)
         if current_bet_side is not None and not is_session_locked and not is_table_locked:
             vn_now = get_vn_now()
             t_date = vn_now.strftime("%d/%m/%Y")
@@ -530,7 +573,6 @@ with tab_game:
             new_current_cap = current_capital + pnl
             res_str = "WIN" if is_win else "LOSE"
 
-            # Tự động cập nhật mốc vốn gốc khi và chỉ khi +100% hoặc -50%
             new_initial_cap = initial_capital
             if new_current_cap >= 2.0 * initial_capital:
                 new_initial_cap = new_current_cap
@@ -540,14 +582,12 @@ with tab_game:
             new_table_orders = orders_in_table + 1
             new_session_orders = order_in_session_count + 1
 
-            # Khóa bàn độc lập
             table_done = 0
             if is_win and orders_in_table == 0:
-                table_done = 1  # Lệnh 1 win -> Khóa bàn
+                table_done = 1
             elif new_table_orders >= 2:
-                table_done = 1  # Đủ 2 lệnh -> Khóa bàn
+                table_done = 1
 
-            # Kiểm tra xem sau lệnh này phiên có đạt target thắng/thua để khóa vĩnh viễn không
             cur_pnl_after = session_pnl_calc + pnl
             cur_pct_after = (cur_pnl_after / session_start_cap) * 100 if session_start_cap > 0 else 0
             is_win_stop = (cur_pct_after >= 4.75) or (cur_pnl_after >= initial_capital * 0.0475)
