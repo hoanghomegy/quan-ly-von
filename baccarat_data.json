@@ -1,155 +1,16 @@
 {
   "config": {
-    "initial_cap": 2400.0,
-    "current_cap": 3760.0,
-    "curr_session_idx": 2,
-    "curr_table_num": 11,
+    "initial_cap": 5000.0,
+    "current_cap": 5000.0,
+    "curr_session_idx": 1,
+    "curr_table_num": 1,
     "table_orders_count": 0,
     "table_completed": 0,
     "last_active_date": "23/09/2026",
-    "completed_sessions": [
-      1
-    ],
+    "completed_sessions": [],
     "session_start_caps": {
-      "1": 2400.0,
-      "2": 3714.0
+      "1": 5000.0
     }
   },
-  "history": [
-    {
-      "trade_date": "23/09/2026",
-      "time_str": "11:33:07",
-      "session_name": "Phiên 1 (Sáng)",
-      "session_idx": 1,
-      "table_num": 1,
-      "order_in_session": 1,
-      "order_in_table": 1,
-      "strategy_desc": "5% Vốn Ban Đầu (Cơ Sở)",
-      "bet_side": "BANKER",
-      "bet_amount": 120.0,
-      "result": "WIN",
-      "pnl": 114.0,
-      "ending_balance": 3714.0
-    },
-    {
-      "trade_date": "23/09/2026",
-      "time_str": "11:33:57",
-      "session_name": "Phiên 2 (Trưa)",
-      "session_idx": 2,
-      "table_num": 2,
-      "order_in_session": 1,
-      "order_in_table": 1,
-      "strategy_desc": "5% Vốn Ban Đầu (Cơ Sở)",
-      "bet_side": "BANKER",
-      "bet_amount": 120.0,
-      "result": "LOSE",
-      "pnl": -120.0,
-      "ending_balance": 3594.0
-    },
-    {
-      "trade_date": "23/09/2026",
-      "time_str": "11:35:01",
-      "session_name": "Phiên 2 (Trưa)",
-      "session_idx": 2,
-      "table_num": 2,
-      "order_in_session": 2,
-      "order_in_table": 2,
-      "strategy_desc": "5% Vốn (Sau Thua - Đánh bằng tiền)",
-      "bet_side": "PLAYER",
-      "bet_amount": 120.0,
-      "result": "WIN",
-      "pnl": 120.0,
-      "ending_balance": 3714.0
-    },
-    {
-      "trade_date": "23/09/2026",
-      "time_str": "12:32:23",
-      "session_name": "Phiên 2 (Trưa)",
-      "session_idx": 2,
-      "table_num": 4,
-      "order_in_session": 3,
-      "order_in_table": 1,
-      "strategy_desc": "5% Vốn (Chưa âm đủ 10% / Đã hồi vốn)",
-      "bet_side": "BANKER",
-      "bet_amount": 120.0,
-      "result": "LOSE",
-      "pnl": -120.0,
-      "ending_balance": 3880.0
-    },
-    {
-      "trade_date": "23/09/2026",
-      "time_str": "12:32:44",
-      "session_name": "Phiên 2 (Trưa)",
-      "session_idx": 2,
-      "table_num": 4,
-      "order_in_session": 4,
-      "order_in_table": 2,
-      "strategy_desc": "5% Vốn (Sau Thua - Đánh bằng tiền)",
-      "bet_side": "PLAYER",
-      "bet_amount": 120.0,
-      "result": "WIN",
-      "pnl": 120.0,
-      "ending_balance": 4000.0
-    },
-    {
-      "trade_date": "23/09/2026",
-      "time_str": "12:33:33",
-      "session_name": "Phiên 2 (Trưa)",
-      "session_idx": 2,
-      "table_num": 5,
-      "order_in_session": 5,
-      "order_in_table": 1,
-      "strategy_desc": "5% Vốn (Chưa âm đủ 10% / Đã hồi vốn)",
-      "bet_side": "PLAYER",
-      "bet_amount": 120.0,
-      "result": "LOSE",
-      "pnl": -120.0,
-      "ending_balance": 3880.0
-    },
-    {
-      "trade_date": "23/09/2026",
-      "time_str": "12:33:39",
-      "session_name": "Phiên 2 (Trưa)",
-      "session_idx": 2,
-      "table_num": 5,
-      "order_in_session": 6,
-      "order_in_table": 2,
-      "strategy_desc": "5% Vốn (Sau Thua - Đánh bằng tiền)",
-      "bet_side": "BANKER",
-      "bet_amount": 120.0,
-      "result": "LOSE",
-      "pnl": -120.0,
-      "ending_balance": 3760.0
-    },
-    {
-      "trade_date": "23/09/2026",
-      "time_str": "12:37:02",
-      "session_name": "Phiên 2 (Trưa)",
-      "session_idx": 2,
-      "table_num": 7,
-      "order_in_session": 7,
-      "order_in_table": 1,
-      "strategy_desc": "5% Vốn (Sau Thua - Đánh bằng tiền)",
-      "bet_side": "PLAYER",
-      "bet_amount": 120.0,
-      "result": "WIN",
-      "pnl": 120.0,
-      "ending_balance": 3880.0
-    },
-    {
-      "trade_date": "23/09/2026",
-      "time_str": "15:06:20",
-      "session_name": "Phiên 2 (Trưa)",
-      "session_idx": 2,
-      "table_num": 10,
-      "order_in_session": 8,
-      "order_in_table": 1,
-      "strategy_desc": "5% Vốn (Chưa âm đủ 10% / Đã hồi vốn)",
-      "bet_side": "PLAYER",
-      "bet_amount": 120.0,
-      "result": "LOSE",
-      "pnl": -120.0,
-      "ending_balance": 3760.0
-    }
-  ]
+  "history": []
 }
