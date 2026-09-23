@@ -137,7 +137,6 @@ def get_default_data():
     }
 
 def sync_read_data():
-    # Ưu tiên đọc file nội bộ để mở app tức thì
     if os.path.exists(DATA_FILE_PATH):
         try:
             with open(DATA_FILE_PATH, "r", encoding="utf-8") as f:
@@ -166,7 +165,6 @@ def sync_read_data():
     return get_default_data()
 
 def _push_github_background(token, repo, data_obj):
-    """Hàm chạy ngầm đẩy lên GitHub không chặn giao diện"""
     url = f"https://api.github.com/repos/{repo}/contents/{DATA_FILE_PATH}"
     headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
     try:
@@ -190,11 +188,9 @@ def _push_github_background(token, repo, data_obj):
         pass
 
 def sync_write_data(data_obj):
-    # 1. Ghi ngay vào file cục bộ cực nhanh (0ms)
     with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(data_obj, f, ensure_ascii=False, indent=2)
 
-    # 2. Đẩy lên GitHub trong luồng riêng ngầm để không bị giật lag
     token = st.secrets.get("GITHUB_TOKEN", "")
     repo = st.secrets.get("REPO_NAME", "hoanghomegy/quan-ly-von")
     if token and repo:
@@ -349,11 +345,8 @@ if (is_session_target_win or is_session_target_lose) and not is_already_complete
 
 is_session_locked = is_already_completed
 
-# =========================================================================
-# --- CẢI TIẾN LOGIC ĐIỀU KIỆN VÀO LỆNH TẠI BÀN (HẠT ĐỎ MỚI ĐÁNH) ---
-# =========================================================================
+# --- ĐIỀU KIỆN VÀO LỆNH TẠI BÀN (HẠT ĐỎ MỚI ĐÁNH) ---
 first_seed_is_blue = (len(st.session_state.list_bigeye) > 0 and st.session_state.list_bigeye[0] == "BLUE")
-# Nếu hạt đầu tiên là BLUE: Bàn bị phế, khóa bàn bắt đổi bàn mới ngay!
 is_table_locked = (table_completed == 1) or (orders_in_table >= 2) or first_seed_is_blue
 
 # --- GIAO DIỆN HEADER ---
@@ -452,7 +445,6 @@ elif is_table_locked:
 tab_game, tab_history, tab_report = st.tabs(["🎮 BÀN ĐÁNH & VÀO LỆNH", "📜 LỊCH SỬ CƯỢC", "📊 BÁO CÁO NGÀY/TUẦN/THÁNG"])
 
 with tab_game:
-    # Render bảng trực tiếp (nhẹ hơn và nhanh gấp 10 lần so với components.html)
     def render_fast_board(columns, is_big_eye=False):
         total_cols = max(30, len(columns) + 3)
         html = '<div class="board-container"><table class="board-table"><thead><tr>'
@@ -486,7 +478,9 @@ with tab_game:
 
     st.write("---")
 
-    # LOGIC QUẢN LÝ VỐN ĐỘC LẬP THEO PHIÊN
+    # =========================================================================
+    # --- LOGIC QUẢN LÝ VỐN NÂNG CẤP: CHỈ GẤP ĐÔI KHI ÂM TỪ 10% VỐN ---
+    # =========================================================================
     base_bet = initial_capital * 0.05
     num_seeds = len(st.session_state.list_bigeye)
     predicted_choice = predict_side_for_red()
@@ -503,6 +497,9 @@ with tab_game:
             else:
                 break
 
+    # Điều kiện âm từ 10% vốn cơ sở trở lên (ví dụ: vốn 200$, PnL <= -20$)
+    is_down_10pct = (session_pnl_calc <= -(initial_capital * 0.10))
+
     if order_in_session_count == 0:
         current_bet_amount = base_bet
         strategy_label = "5% Vốn Ban Đầu (Cơ Sở)"
@@ -512,14 +509,19 @@ with tab_game:
             current_bet_amount = base_bet
             strategy_label = "5% Vốn (Sau Thua - Đánh bằng tiền)"
         else:
-            if consec_wins == 1:
+            # Lệnh trước là WIN
+            # CHỈ gấp đôi nếu phiên đang bị ÂM từ 10% trở lên và đang có đúng 1 WIN
+            if is_down_10pct and consec_wins == 1:
                 current_bet_amount = base_bet * 2.0
-                strategy_label = "10% (Gấp Đôi sau 1 Win - Săn chuỗi 2 WIN)"
+                strategy_label = "10% (Gấp Đôi vì Âm ≥ 10% - Săn chuỗi 2 WIN)"
             else:
                 current_bet_amount = base_bet
-                strategy_label = "5% Vốn (Quay về cơ sở sau 2 Win)"
+                if not is_down_10pct:
+                    strategy_label = "5% Vốn (Chưa âm đủ 10% / Đã hồi vốn)"
+                else:
+                    strategy_label = "5% Vốn (Quay về cơ sở sau 2 Win)"
 
-    # ĐIỀU KIỆN VÀO LỆNH TẠI BÀN (CHỈ VÀO KHI HẠT ĐẦU TIÊN LÀ ĐỎ)
+    # ĐIỀU KIỆN VÀO LỆNH TẠI BÀN
     if is_session_locked:
         st.markdown('<div class="box-signal-stop">🛑 PHIÊN ĐÃ HOÀN THÀNH. KHÓA CỨNG TOÀN BỘ NÚT ĐẶT LỆNH.</div>', unsafe_allow_html=True)
     elif first_seed_is_blue:
@@ -529,7 +531,6 @@ with tab_game:
     elif num_seeds == 0:
         st.markdown('<div class="box-signal-wait">⏳ Đang chờ Bảng phụ 1 xuất hiện hạt đầu tiên (phải là hạt ĐỎ mới đánh)...</div>', unsafe_allow_html=True)
     else:
-        # Hạt đầu tiên chắc chắn là RED -> Cho phép vào lệnh
         current_bet_side = predicted_choice
         if current_bet_side == "BANKER":
             st.markdown(f"""
@@ -562,7 +563,6 @@ with tab_game:
             st.session_state.list_bigeye.append(color)
             st.session_state.road_bigeye = append_road(st.session_state.road_bigeye, color)
 
-        # Chỉ tính cược nếu đủ điều kiện (hạt đầu tiên là RED và có tín hiệu vào lệnh)
         if current_bet_side is not None and not is_session_locked and not is_table_locked:
             vn_now = get_vn_now()
             t_date = vn_now.strftime("%d/%m/%Y")
