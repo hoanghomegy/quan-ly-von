@@ -1,7 +1,7 @@
 {
   "config": {
     "initial_cap": 2400.0,
-    "current_cap": 3600.0,
+    "current_cap": 2400.0,
     "curr_session_idx": 1,
     "curr_table_num": 1,
     "table_orders_count": 0,
@@ -9,129 +9,8 @@
     "last_active_date": "23/09/2026",
     "completed_sessions": [],
     "session_start_caps": {
-      "1": 536.25
+      "1": 2400.0
     }
   },
-  "history": [
-    {
-      "trade_date": "21/09/2026",
-      "time_str": "08:34:58",
-      "session_name": "Phiên 1 (Sáng)",
-      "session_idx": 1,
-      "table_num": 2,
-      "order_in_session": 1,
-      "order_in_table": 1,
-      "strategy_desc": "5% Vốn Ban Đầu (Cơ Sở)",
-      "bet_side": "PLAYER",
-      "bet_amount": 15.0,
-      "result": "LOSE",
-      "pnl": -15.0,
-      "ending_balance": 285.0
-    },
-    {
-      "trade_date": "21/09/2026",
-      "time_str": "08:35:22",
-      "session_name": "Phiên 1 (Sáng)",
-      "session_idx": 1,
-      "table_num": 2,
-      "order_in_session": 2,
-      "order_in_table": 2,
-      "strategy_desc": "5% Vốn (Sau Thua - Đánh bằng tiền)",
-      "bet_side": "BANKER",
-      "bet_amount": 15.0,
-      "result": "WIN",
-      "pnl": 14.25,
-      "ending_balance": 299.25
-    },
-    {
-      "trade_date": "21/09/2026",
-      "time_str": "08:37:03",
-      "session_name": "Phiên 1 (Sáng)",
-      "session_idx": 1,
-      "table_num": 3,
-      "order_in_session": 3,
-      "order_in_table": 1,
-      "strategy_desc": "10% (Gấp Đôi sau 1 Win - Săn chuỗi 2 WIN)",
-      "bet_side": "BANKER",
-      "bet_amount": 30.0,
-      "result": "LOSE",
-      "pnl": -30.0,
-      "ending_balance": 269.25
-    },
-    {
-      "trade_date": "21/09/2026",
-      "time_str": "08:37:28",
-      "session_name": "Phiên 1 (Sáng)",
-      "session_idx": 1,
-      "table_num": 3,
-      "order_in_session": 4,
-      "order_in_table": 2,
-      "strategy_desc": "5% Vốn (Sau Thua - Đánh bằng tiền)",
-      "bet_side": "PLAYER",
-      "bet_amount": 15.0,
-      "result": "LOSE",
-      "pnl": -15.0,
-      "ending_balance": 254.25
-    },
-    {
-      "trade_date": "21/09/2026",
-      "time_str": "08:39:42",
-      "session_name": "Phiên 1 (Sáng)",
-      "session_idx": 1,
-      "table_num": 4,
-      "order_in_session": 5,
-      "order_in_table": 1,
-      "strategy_desc": "5% Vốn (Sau Thua - Đánh bằng tiền)",
-      "bet_side": "PLAYER",
-      "bet_amount": 15.0,
-      "result": "LOSE",
-      "pnl": -15.0,
-      "ending_balance": 239.25
-    },
-    {
-      "trade_date": "21/09/2026",
-      "time_str": "08:40:09",
-      "session_name": "Phiên 1 (Sáng)",
-      "session_idx": 1,
-      "table_num": 4,
-      "order_in_session": 6,
-      "order_in_table": 2,
-      "strategy_desc": "5% Vốn (Sau Thua - Đánh bằng tiền)",
-      "bet_side": "BANKER",
-      "bet_amount": 15.0,
-      "result": "WIN",
-      "pnl": 14.25,
-      "ending_balance": 253.5
-    },
-    {
-      "trade_date": "21/09/2026",
-      "time_str": "12:37:11",
-      "session_name": "Phiên 1 (Sáng)",
-      "session_idx": 1,
-      "table_num": 6,
-      "order_in_session": 7,
-      "order_in_table": 1,
-      "strategy_desc": "10% (Gấp Đôi sau 1 Win - Săn chuỗi 2 WIN)",
-      "bet_side": "PLAYER",
-      "bet_amount": 30.0,
-      "result": "LOSE",
-      "pnl": -30.0,
-      "ending_balance": 522.0
-    },
-    {
-      "trade_date": "21/09/2026",
-      "time_str": "12:37:42",
-      "session_name": "Phiên 1 (Sáng)",
-      "session_idx": 1,
-      "table_num": 6,
-      "order_in_session": 8,
-      "order_in_table": 2,
-      "strategy_desc": "5% Vốn (Sau Thua - Đánh bằng tiền)",
-      "bet_side": "BANKER",
-      "bet_amount": 15.0,
-      "result": "WIN",
-      "pnl": 14.25,
-      "ending_balance": 536.25
-    }
-  ]
+  "history": []
 }
