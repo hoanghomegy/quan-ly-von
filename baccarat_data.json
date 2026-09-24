@@ -1,10 +1,10 @@
 {
   "config": {
     "initial_cap": 5000.0,
-    "current_cap": 5475.0,
+    "current_cap": 5225.0,
     "curr_session_idx": 3,
     "curr_table_num": 9,
-    "table_orders_count": 0,
+    "table_orders_count": 1,
     "table_completed": 0,
     "last_active_date": "24/09/2026",
     "completed_sessions": [
@@ -47,6 +47,21 @@
       "result": "WIN",
       "pnl": 237.5,
       "ending_balance": 5475.0
+    },
+    {
+      "trade_date": "24/09/2026",
+      "time_str": "11:24:18",
+      "session_name": "Phiên 3 (Chiều)",
+      "session_idx": 3,
+      "table_num": 9,
+      "order_in_session": 1,
+      "order_in_table": 1,
+      "strategy_desc": "5% Vốn Ban Đầu (Cơ Sở)",
+      "bet_side": "BANKER",
+      "bet_amount": 250.0,
+      "result": "LOSE",
+      "pnl": -250.0,
+      "ending_balance": 5225.0
     }
   ]
 }
