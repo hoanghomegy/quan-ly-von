@@ -3,8 +3,8 @@
     "initial_cap": 5000.0,
     "current_cap": 5225.0,
     "curr_session_idx": 3,
-    "curr_table_num": 9,
-    "table_orders_count": 1,
+    "curr_table_num": 10,
+    "table_orders_count": 0,
     "table_completed": 0,
     "last_active_date": "24/09/2026",
     "completed_sessions": [
