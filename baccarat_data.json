@@ -1,11 +1,11 @@
 {
   "config": {
     "initial_cap": 5000.0,
-    "current_cap": 4975.0,
+    "current_cap": 4725.0,
     "curr_session_idx": 3,
     "curr_table_num": 10,
-    "table_orders_count": 1,
-    "table_completed": 0,
+    "table_orders_count": 2,
+    "table_completed": 1,
     "last_active_date": "24/09/2026",
     "completed_sessions": [
       1,
@@ -77,6 +77,21 @@
       "result": "LOSE",
       "pnl": -250.0,
       "ending_balance": 4975.0
+    },
+    {
+      "trade_date": "24/09/2026",
+      "time_str": "15:28:07",
+      "session_name": "Phiên 3 (Chiều)",
+      "session_idx": 3,
+      "table_num": 10,
+      "order_in_session": 3,
+      "order_in_table": 2,
+      "strategy_desc": "5% Vốn (Sau Thua - Đánh bằng tiền)",
+      "bet_side": "BANKER",
+      "bet_amount": 250.0,
+      "result": "LOSE",
+      "pnl": -250.0,
+      "ending_balance": 4725.0
     }
   ]
 }
