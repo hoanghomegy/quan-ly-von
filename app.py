@@ -4,12 +4,52 @@ from datetime import date
 import io
 
 st.set_page_config(
-    page_title="Dự Đoán & Quản Lý Vốn 4 Phiên",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="Dự Đoán & Quản Lý Vốn",
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
 
-# Khởi tạo bộ nhớ phiên (Session State)
+# Tự động phân tích thuộc tính số Roulette
+ROULETTE_DATA = {
+    0: {"p1": "0", "p2": "0", "p3": "0", "p4": "0"},
+    1: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "LẺ"},
+    2: {"p1": "I", "p2": "ĐEN", "p3": "NHỎ", "p4": "CHẴN"},
+    3: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "LẺ"},
+    4: {"p1": "I", "p2": "ĐEN", "p3": "NHỎ", "p4": "CHẴN"},
+    5: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "LẺ"},
+    6: {"p1": "I", "p2": "ĐEN", "p3": "NHỎ", "p4": "CHẴN"},
+    7: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "LẺ"},
+    8: {"p1": "I", "p2": "ĐEN", "p3": "NHỎ", "p4": "CHẴN"},
+    9: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "LẺ"},
+    10: {"p1": "I", "p2": "ĐEN", "p3": "NHỎ", "p4": "CHẴN"},
+    11: {"p1": "I", "p2": "ĐEN", "p3": "NHỎ", "p4": "LẺ"},
+    12: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "CHẴN"},
+    13: {"p1": "II", "p2": "ĐEN", "p3": "NHỎ", "p4": "LẺ"},
+    14: {"p1": "II", "p2": "ĐỎ", "p3": "NHỎ", "p4": "CHẴN"},
+    15: {"p1": "II", "p2": "ĐEN", "p3": "NHỎ", "p4": "LẺ"},
+    16: {"p1": "II", "p2": "ĐỎ", "p3": "NHỎ", "p4": "CHẴN"},
+    17: {"p1": "II", "p2": "ĐEN", "p3": "NHỎ", "p4": "LẺ"},
+    18: {"p1": "II", "p2": "ĐỎ", "p3": "NHỎ", "p4": "CHẴN"},
+    19: {"p1": "II", "p2": "ĐỎ", "p3": "TO", "p4": "LẺ"},
+    20: {"p1": "II", "p2": "ĐEN", "p3": "TO", "p4": "CHẴN"},
+    21: {"p1": "II", "p2": "ĐỎ", "p3": "TO", "p4": "LẺ"},
+    22: {"p1": "II", "p2": "ĐEN", "p3": "TO", "p4": "CHẴN"},
+    23: {"p1": "II", "p2": "ĐỎ", "p3": "TO", "p4": "LẺ"},
+    24: {"p1": "II", "p2": "ĐEN", "p3": "TO", "p4": "CHẴN"},
+    25: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "LẺ"},
+    26: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "CHẴN"},
+    27: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "LẺ"},
+    28: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "CHẴN"},
+    29: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "LẺ"},
+    30: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "CHẴN"},
+    31: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "LẺ"},
+    32: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "CHẴN"},
+    33: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "LẺ"},
+    34: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "CHẴN"},
+    35: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "LẺ"},
+    36: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "CHẴN"},
+}
+
 if "history" not in st.session_state:
     st.session_state.history = []
 
@@ -93,11 +133,15 @@ def calculate_next_capital(df_history):
             
     return cur_phase, cur_stake
 
-# --- GIAO DIỆN ĐIỀU KHIỂN ---
-st.sidebar.title("🎮 ĐIỀU KHIỂN HỆ THỐNG")
-selected_date = st.sidebar.date_input("Ngày giao dịch:", date.today())
-session_names = ["Phiên 1: Sáng", "Phiên 2: Trưa", "Phiên 3: Chiều", "Phiên 4: Tối"]
-selected_session = st.sidebar.selectbox("Chọn phiên làm việc:", session_names)
+# --- GIAO DIỆN CHÍNH (TỐI ƯU MÀN HÌNH ĐIỆN THOẠI) ---
+st.markdown("<h3 style='text-align: center;'>🎯 DỰ ĐOÁN & QUẢN LÝ VỐN 4 PHIÊN</h3>", unsafe_allow_html=True)
+
+# Chọn ngày & Phiên ngay trên đầu màn hình
+c_top1, c_top2 = st.columns(2)
+with c_top1:
+    selected_date = st.date_input("Ngày:", date.today())
+with c_top2:
+    selected_session = st.selectbox("Phiên:", ["Phien 1 (Sang)", "Phien 2 (Trua)", "Phien 3 (Chieu)", "Phien 4 (Toi)"])
 
 df_all = get_session_df()
 if not df_all.empty:
@@ -108,63 +152,61 @@ else:
 next_stt = len(df_cur) + 1
 cur_cum = df_cur["cumulative"].iloc[-1] if not df_cur.empty else 0
 
-# Thẻ chỉ số trạng thái
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Phiên làm việc", selected_session)
-c2.metric("Mục tiêu (Target)", "+4 Đơn vị")
-c3.metric("Cắt lỗ (Stop Loss)", "-36 Đơn vị")
-
+# Thẻ trạng thái vốn nổi bật
+c_kpi1, c_kpi2 = st.columns(2)
+c_kpi1.metric("Mục tiêu / Cắt lỗ", "+4 / -36")
 if cur_cum >= 4:
-    c4.metric("Lũy kế", f"+{cur_cum}", "CHỐT LÃI (+4)")
-    st.success("🎉 ĐÃ ĐẠT TARGET +4 ĐƠN VỊ! ĐÓNG PHIÊN VÀ DỪNG LẠI.")
+    c_kpi2.metric("Lũy kế", f"+{cur_cum} ĐV", "CHỐT LÃI (ĐẠT)")
+    st.success("🎉 ĐÃ ĐẠT TARGET +4! ĐÓNG PHIÊN NGHỈ NGƠI.")
 elif cur_cum <= -36:
-    c4.metric("Lũy kế", f"{cur_cum}", "CẮT LỖ (-36)")
-    st.error("⚠️ ĐÃ CHẠM MỨC CẮT LỖ -36! DỪNG PHIÊN.")
+    c_kpi2.metric("Lũy kế", f"{cur_cum} ĐV", "CẮT LỖ (DỪNG)")
+    st.error("🛑 ĐÃ CHẠM MỨC CẮT LỖ -36! DỪNG LẠI.")
 else:
-    c4.metric("Lũy kế", f"{cur_cum} ĐV", "ĐANG CHẠY")
+    c_kpi2.metric("Lũy kế", f"{cur_cum} ĐV", "ĐANG ĐÁNH")
 
 st.markdown("---")
 
-# Hộp báo tín hiệu ván tiếp theo
+# HỘP BÁO TÍN HIỆU VÀO LỆNH (TO RÕ CHO ĐIỆN THOẠI)
 pred_type, pred_target = get_prediction_info(next_stt, df_cur)
 next_phase, next_stake = calculate_next_capital(df_cur)
 
-st.subheader(f"📌 TÍN HIỆU VÁN TIẾP THEO (STT: {next_stt})")
-b1, b2, b3, b4 = st.columns(4)
 if next_stt <= 3:
-    b1.info(f"Ván mốc {next_stt}/3: Nhập kết quả")
-    b2.write("-")
-    b3.write("-")
-    b4.write("-")
+    st.info(f"⏳ **Ván mốc {next_stt}/3:** Nhập kết quả lấy dữ liệu mốc")
 else:
-    b1.warning(f"🎯 **BÀN CƯỢC:** {pred_type}")
-    b2.error(f"👉 **CỬA VÀO LỆNH:** **{pred_target}**")
-    b3.info(f"📊 **GIAI ĐOẠN:** **{next_phase}**")
-    b4.success(f"💰 **MỨC CƯỢC:** **{next_stake} ĐƠN VỊ**")
+    st.markdown(f"""
+    <div style='background-color: #FFF2CC; padding: 15px; border-radius: 10px; border: 2px solid #D6B656; text-align: center;'>
+        <h4 style='margin:0; color:#333;'>VÁN TIẾP THEO (STT: {next_stt})</h4>
+        <h2 style='margin:8px 0; color:#C00000;'>👉 ĐÁNH: <b>{pred_target}</b></h2>
+        <p style='margin:0; font-size: 16px; color:#1F4E78;'>
+            <b>{pred_type}</b> | Giai đoạn: <b>{next_phase}</b> | Cược: <b style='color:#C00000;'>{next_stake} Đơn vị</b>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Form nhập kết quả ván đấu
-st.markdown("#### 📝 Nhập kết quả mở thưởng")
+st.write("")
+
+# FORM NHẬP SỐ - TỰ ĐỘNG NHẬN DIỆN THUỘC TÍNH
 with st.form("input_form", clear_on_submit=True):
-    col_in1, col_in2, col_in3, col_in4, col_in5 = st.columns(5)
-    kq_so = col_in1.number_input("Số ra", min_value=0, max_value=36, value=0, step=1)
-    player1 = col_in2.selectbox("Player 1 (3 Cửa)", ["I", "II", "III", "0"])
-    player2 = col_in3.selectbox("Player 2 (Đen/Đỏ)", ["ĐỎ", "ĐEN", "0"])
-    player3 = col_in4.selectbox("Player 3 (Nhỏ/To)", ["NHỎ", "TO", "0"])
-    player4 = col_in5.selectbox("Player 4 (Lẻ/Chẵn)", ["LẺ", "CHẴN", "0"])
+    kq_so = st.number_input("Nhập Số Mở Thưởng (0 - 36):", min_value=0, max_value=36, value=0, step=1)
     
-    submitted = st.form_submit_button("Xác nhận kết quả ván này", use_container_width=True)
+    # Tự động gợi ý thuộc tính theo số vừa nhập
+    attr = ROULETTE_DATA.get(kq_so, {"p1": "0", "p2": "0", "p3": "0", "p4": "0"})
+    st.caption(f"Nhận diện: Cửa {attr['p1']} | {attr['p2']} | {attr['p3']} | {attr['p4']}")
+    
+    submitted = st.form_submit_button("XÁC NHẬN KẾT QUẢ", use_container_width=True)
     
     if submitted:
+        p1, p2, p3, p4 = attr["p1"], attr["p2"], attr["p3"], attr["p4"]
         if next_stt <= 3:
             st.session_state.history.append({
                 "session_date": str(selected_date),
                 "session_name": selected_session,
                 "stt": next_stt,
                 "kq_so": kq_so,
-                "player1": player1,
-                "player2": player2,
-                "player3": player3,
-                "player4": player4,
+                "player1": p1,
+                "player2": p2,
+                "player3": p3,
+                "player4": p4,
                 "bet_type": "-",
                 "prediction": "-",
                 "actual_result": "-",
@@ -177,13 +219,7 @@ with st.form("input_form", clear_on_submit=True):
             })
             st.rerun()
         else:
-            if pred_type == "Bàn LẺ / CHẴN":
-                actual = player4
-            elif pred_type == "Bàn NHỎ / TO":
-                actual = player3
-            else:
-                actual = player2
-                
+            actual = p4 if pred_type == "Bàn LẺ / CHẴN" else (p3 if pred_type == "Bàn NHỎ / TO" else p2)
             wl = "WIN" if actual == pred_target else "LOSE"
             pnl = next_stake if wl == "WIN" else -next_stake
             new_cum = cur_cum + pnl
@@ -194,10 +230,10 @@ with st.form("input_form", clear_on_submit=True):
                 "session_name": selected_session,
                 "stt": next_stt,
                 "kq_so": kq_so,
-                "player1": player1,
-                "player2": player2,
-                "player3": player3,
-                "player4": player4,
+                "player1": p1,
+                "player2": p2,
+                "player3": p3,
+                "player4": p4,
                 "bet_type": pred_type,
                 "prediction": pred_target,
                 "actual_result": actual,
@@ -210,38 +246,41 @@ with st.form("input_form", clear_on_submit=True):
             })
             st.rerun()
 
-# Nút hoàn tác, xóa phiên và xuất file
-col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 2])
-if col_btn1.button("↩️ Xóa ván gần nhất"):
-    if st.session_state.history:
-        st.session_state.history.pop()
+# CÁC NÚT THAO TÁC NHANH
+btn_c1, btn_c2 = st.columns(2)
+with btn_c1:
+    if st.button("↩️ Xóa ván gần nhất", use_container_width=True):
+        if st.session_state.history:
+            st.session_state.history.pop()
+            st.rerun()
+with btn_c2:
+    if st.button("🗑️ Reset phiên", use_container_width=True):
+        st.session_state.history = [
+            x for x in st.session_state.history 
+            if not (x["session_date"] == str(selected_date) and x["session_name"] == selected_session)
+        ]
         st.rerun()
 
-if col_btn2.button("🗑️ Reset phiên này"):
-    st.session_state.history = [
-        item for item in st.session_state.history 
-        if not (item["session_date"] == str(selected_date) and item["session_name"] == selected_session)
-    ]
-    st.rerun()
-
+# XUẤT FILE EXCEL AN TOÀN
 if not df_cur.empty:
     output = io.BytesIO()
+    clean_sheet_name = selected_session.replace(":", "").replace(" ", "_")[:30]
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_cur.to_excel(writer, index=False, sheet_name=selected_session[:10])
+        df_cur.to_excel(writer, index=False, sheet_name=clean_sheet_name)
     excel_data = output.getvalue()
-    col_btn3.download_button(
+    st.download_button(
         label="📥 Tải lịch sử phiên về Excel",
         data=excel_data,
-        file_name=f"Lich_Su_{selected_session}_{selected_date}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        file_name=f"Lich_su_{clean_sheet_name}_{selected_date}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
     )
 
-st.markdown("### 📋 Diễn biến chi tiết trong phiên")
+# BẢNG DIỄN BIẾN PHIÊN
+st.markdown("#### 📋 Diễn biến phiên")
 if not df_cur.empty:
-    st.dataframe(df_cur[[
-        "stt", "kq_so", "player1", "player2", "player3", "player4",
-        "bet_type", "prediction", "actual_result", "win_lose",
-        "phase", "stake", "pnl", "cumulative", "status"
-    ]], use_container_width=True)
+    show_df = df_cur[["stt", "kq_so", "prediction", "actual_result", "win_lose", "stake", "cumulative"]].copy()
+    show_df.columns = ["STT", "Số", "Dự Đoán", "Ra", "W/L", "Cược", "Lũy Kế"]
+    st.dataframe(show_df, use_container_width=True)
 else:
-    st.info("Chưa có ván nào trong phiên này. Nhập 3 ván đầu tiên để làm mốc tín hiệu.")
+    st.write("Chưa có ván nào trong phiên này.")
