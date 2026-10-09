@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
+import json
+import os
 import io
 
 st.set_page_config(
@@ -9,7 +11,23 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Bảng thuộc tính chuẩn Roulette 37 số (0 - 36)
+DB_FILE = "history_data.json"
+
+# --- HÀM TỰ ĐỘNG ĐỌC VÀ LƯU VĨNH VIỄN VÀO FILE ---
+def load_all_history():
+    if not os.path.exists(DB_FILE):
+        return []
+    try:
+        with open(DB_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def save_all_history(data_list):
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(data_list, f, ensure_ascii=False, indent=2)
+
+# Bảng thuộc tính Roulette 37 số (0 - 36)
 ROULETTE_DATA = {
     0: {"p1": "0", "p2": "0", "p3": "0", "p4": "0"},
     1: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "LẺ"},
@@ -49,14 +67,6 @@ ROULETTE_DATA = {
     35: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "LẺ"},
     36: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "CHẴN"},
 }
-
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-def get_session_df():
-    if not st.session_state.history:
-        return pd.DataFrame()
-    return pd.DataFrame(st.session_state.history)
 
 def get_prediction_info(stt, df_history):
     if stt <= 3:
@@ -137,8 +147,10 @@ def process_round_input(kq_so, selected_date, selected_session, next_stt, cur_cu
     attr = ROULETTE_DATA.get(kq_so, {"p1": "0", "p2": "0", "p3": "0", "p4": "0"})
     p1, p2, p3, p4 = attr["p1"], attr["p2"], attr["p3"], attr["p4"]
     
+    all_history = load_all_history()
+    
     if next_stt <= 3:
-        st.session_state.history.append({
+        new_row = {
             "session_date": str(selected_date),
             "session_name": selected_session,
             "stt": next_stt,
@@ -159,16 +171,15 @@ def process_round_input(kq_so, selected_date, selected_session, next_stt, cur_cu
             "cumulative": 0,
             "money_cum": 0,
             "status": "Dữ liệu mốc"
-        })
+        }
     else:
         actual = p4 if pred_type == "Bàn LẺ / CHẴN" else (p3 if pred_type == "Bàn NHỎ / TO" else p2)
         wl = "WIN" if actual == pred_target else "LOSE"
         pnl = next_stake if wl == "WIN" else -next_stake
         new_cum = cur_cum + pnl
-        
         status = "ĐẠT TARGET (+4)" if new_cum >= 4 else ("CẮT LỖ (-36)" if new_cum <= -36 else "TIẾP TỤC")
         
-        st.session_state.history.append({
+        new_row = {
             "session_date": str(selected_date),
             "session_name": selected_session,
             "stt": next_stt,
@@ -189,35 +200,41 @@ def process_round_input(kq_so, selected_date, selected_session, next_stt, cur_cu
             "cumulative": new_cum,
             "money_cum": new_cum * unit_val,
             "status": status
-        })
+        }
+        
+    all_history.append(new_row)
+    save_all_history(all_history)
 
 # --- GIAO DIỆN CHÍNH ---
 st.markdown("<h3 style='text-align: center; color: #1F4E78;'>🎯 DỰ ĐOÁN & QUẢN LÝ VỐN 4 PHIÊN</h3>", unsafe_allow_html=True)
 
-# 1. BẢNG CÀI ĐẶT: NGÀY, PHIÊN & GIÁ TRỊ 1 UNIT
+# 1. BẢNG CÀI ĐẶT: NGÀY, PHIÊN & UNIT
 c_top1, c_top2, c_top3 = st.columns([1, 1, 1])
 with c_top1:
     selected_date = st.date_input("Ngày:", date.today())
 with c_top2:
     selected_session = st.selectbox("Phiên:", ["Phien 1 (Sang)", "Phien 2 (Trua)", "Phien 3 (Chieu)", "Phien 4 (Toi)"])
 with c_top3:
-    unit_val = st.number_input("Giá trị 1 Unit:", min_value=1, value=50, step=10, help="Ví dụ: Nhập 50 tương đương 1 Unit = 50k")
+    unit_val = st.number_input("Giá trị 1 Unit:", min_value=1, value=50, step=10, help="Ví dụ: 50 tương đương 1 Unit = 50k")
 
-df_all = get_session_df()
-if not df_all.empty:
+# Đọc toàn bộ dữ liệu vĩnh viễn từ file
+all_records = load_all_history()
+if all_records:
+    df_all = pd.DataFrame(all_records)
     df_cur = df_all[(df_all["session_date"] == str(selected_date)) & (df_all["session_name"] == selected_session)].copy()
 else:
+    df_all = pd.DataFrame()
     df_cur = pd.DataFrame()
 
 next_stt = len(df_cur) + 1
 cur_cum = int(df_cur["cumulative"].iloc[-1]) if not df_cur.empty else 0
 cur_money = cur_cum * unit_val
 
-# 2. BẢNG KPI TRẠNG THÁI VỐN & LỢI NHUẬN QUY ĐỔI
+# 2. BẢNG KPI TRẠNG THÁI VỐN
 c_kpi1, c_kpi2 = st.columns(2)
 target_money = 4 * unit_val
 stop_money = -36 * unit_val
-c_kpi1.metric("Mục tiêu / Cắt lỗ", f"+4 / -36 ĐV", f"+{target_money:,} / {stop_money:,}")
+c_kpi1.metric("Mục tiêu / Cắt lỗ", "+4 / -36 ĐV", f"+{target_money:,} / {stop_money:,}")
 
 is_finished = False
 
@@ -234,13 +251,13 @@ else:
 
 st.markdown("---")
 
-# 3. HỘP TÍN HIỆU VÀO LỆNH (TỰ ĐỘNG KHÓA KHI ĐẠT TARGET HOẶC CẮT LỖ)
+# 3. TÍN HIỆU & KHÓA LỆNH
 if is_finished:
     st.markdown("""
     <div style='background-color: #E2EFDA; padding: 20px; border-radius: 12px; border: 2px solid #375623; text-align: center;'>
         <h2 style='margin:0; color: #276A3C;'>🔒 PHIÊN NÀY ĐÃ ĐƯỢC KHÓA HOÀN TOÀN</h2>
         <p style='margin: 8px 0 0 0; font-size: 16px; color: #333;'>
-            Bạn đã đạt đúng kỷ luật chốt lời/cắt lỗ. Hệ thống dừng phát tín hiệu để bảo vệ vốn. Hãy nghỉ ngơi và chờ phiên tiếp theo!
+            Bạn đã đạt đúng kỷ luật chốt lời/cắt lỗ. Hệ thống dừng phát tín hiệu để bảo vệ thành quả. Hãy nghỉ ngơi và chờ phiên tiếp theo!
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -264,7 +281,7 @@ else:
 
     st.write("")
 
-    # FORM NHẬP KẾT QUẢ BẰNG SỐ (ĐỂ TRỐNG Ô)
+    # FORM NHẬP KẾT QUẢ (TRẮNG TINH)
     with st.form("input_form", clear_on_submit=True):
         kq_input = st.number_input(
             "Nhập số mở thưởng (0 - 36):",
@@ -299,23 +316,31 @@ else:
                         process_round_input(val, selected_date, selected_session, next_stt, cur_cum, pred_type, pred_target, next_phase, next_stake, unit_val)
                         st.rerun()
 
-# 4. NÚT THAO TÁC PHỤ
+# 4. NÚT XÓA VÁN & RESET PHIÊN (LƯU THẲNG VÀO FILE VĨNH VIỄN)
 st.write("")
 btn_c1, btn_c2 = st.columns(2)
 with btn_c1:
     if st.button("↩️ Xóa ván gần nhất", use_container_width=True):
-        if st.session_state.history:
-            st.session_state.history.pop()
-            st.rerun()
+        all_recs = load_all_history()
+        # Tìm và xóa bản ghi cuối cùng của phiên này
+        for idx in range(len(all_recs) - 1, -1, -1):
+            if all_recs[idx]["session_date"] == str(selected_date) and all_recs[idx]["session_name"] == selected_session:
+                all_recs.pop(idx)
+                save_all_history(all_recs)
+                st.rerun()
+                break
+
 with btn_c2:
     if st.button("🗑️ Reset phiên này", use_container_width=True):
-        st.session_state.history = [
-            x for x in st.session_state.history 
+        all_recs = load_all_history()
+        all_recs = [
+            x for x in all_recs 
             if not (x["session_date"] == str(selected_date) and x["session_name"] == selected_session)
         ]
+        save_all_history(all_recs)
         st.rerun()
 
-# 5. XUẤT FILE EXCEL
+# 5. XUẤT LỊCH SỬ RA EXCEL
 if not df_cur.empty:
     output = io.BytesIO()
     clean_sheet_name = selected_session.replace(":", "").replace(" ", "_")[:30]
@@ -330,11 +355,11 @@ if not df_cur.empty:
         use_container_width=True
     )
 
-# 6. BẢNG CHI TIẾT
+# 6. BẢNG DIỄN BIẾN PHIÊN
 st.markdown("#### 📋 Diễn biến chi tiết trong phiên")
 if not df_cur.empty:
     show_df = df_cur[["stt", "kq_so", "prediction", "actual_result", "win_lose", "stake", "money_stake", "cumulative", "money_cum"]].copy()
     show_df.columns = ["STT", "Số", "Dự Đoán", "Ra", "W/L", "Cược (ĐV)", "Tiền Cược", "Lũy Kế (ĐV)", "Tổng Tiền"]
     st.dataframe(show_df, use_container_width=True)
 else:
-    st.write("Chưa có ván nào trong phiên này. Nhập 3 ván đầu tiên để bắt đầu.")
+    st.write("Chưa có ván nào trong phiên này. Hãy nhập 3 ván đầu tiên để bắt đầu.")
