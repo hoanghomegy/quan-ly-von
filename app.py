@@ -86,9 +86,7 @@ ROULETTE_DATA = {
     36: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "CHẴN"},
 }
 
-# --- 2. LOGIC VÀO LỆNH MỚI THEO YÊU CẦU ---
-# Ván mốc: V1 = Nhỏ/To, V2 = Lẻ/Chẵn, V3 = Đen/Đỏ
-# Dự đoán đánh ngược: V4 = Đen/Đỏ (lấy V3), V5 = Lẻ/Chẵn (lấy V2), V6 = Nhỏ/To (lấy V1)
+# --- 2. LOGIC DỰ ĐOÁN (CHU KỲ NGƯỢC 3 VÁN) ---
 def get_prediction_info(stt, df_history):
     if stt <= 3:
         return "-", "-"
@@ -100,37 +98,63 @@ def get_prediction_info(stt, df_history):
     step_in_block = (stt - 1) % 3
     
     if step_in_block == 0:
-        # Ván 4 (lệnh 1 chu kỳ): Bàn ĐEN / ĐỎ -> lấy Player 2 của ván 3 (base_end_stt)
         bet_type = "Bàn ĐEN / ĐỎ"
         target_row = df_history[df_history["stt"] == base_end_stt]
         pred = target_row["player2"].values[0] if not target_row.empty else "-"
     elif step_in_block == 1:
-        # Ván 5 (lệnh 2 chu kỳ): Bàn LẺ / CHẴN -> lấy Player 4 của ván 2 (base_end_stt - 1)
         bet_type = "Bàn LẺ / CHẴN"
         target_row = df_history[df_history["stt"] == (base_end_stt - 1)]
         pred = target_row["player4"].values[0] if not target_row.empty else "-"
     else:
-        # Ván 6 (lệnh 3 chu kỳ): Bàn NHỎ / TO -> lấy Player 3 của ván 1 (base_end_stt - 2)
         bet_type = "Bàn NHỎ / TO"
         target_row = df_history[df_history["stt"] == (base_end_stt - 2)]
         pred = target_row["player3"].values[0] if not target_row.empty else "-"
         
     return bet_type, pred
 
-# --- 3. GIAO DIỆN CHÍNH ---
+# --- 3. LOGIC TÍNH TIỀN CƯỢC THÔNG MINH (SĂN CHUỖI 2 WIN KÉO VỐN) ---
+def get_next_stake(df_cur, base_capital, start_session_cap):
+    unit_5pct = int(base_capital * 0.05)
+    unit_10pct = unit_5pct * 2
+    
+    if len(df_cur) < 3:
+        return 0, "Mốc"
+    if len(df_cur) == 3:
+        # Ván 4 (Lệnh đầu tiên của phiên)
+        return unit_5pct, "Lệnh 1 (5%)"
+    
+    last_row = df_cur.iloc[-1]
+    cur_balance = last_row["cur_balance"]
+    last_wl = last_row["win_lose"]
+    last_stake = last_row["stake_amount"]
+    
+    # 1. Nếu vốn hiện tại đã bằng hoặc cao hơn vốn đầu phiên: Luôn đánh 5%
+    if cur_balance >= start_session_cap:
+        return unit_5pct, "Đủ vốn (5%)"
+    
+    # 2. Nếu đang bị ÂM VỐN (cur_balance < start_session_cap):
+    if last_wl == "WIN":
+        if last_stake == unit_5pct:
+            # Vừa ăn được 1 lệnh WIN đầu tiên -> GẤP ĐÔI (10%) để hoàn thành chuỗi 2 WIN gỡ vốn!
+            return unit_10pct, "Săn 2 WIN (Gấp đôi 10%)"
+        else:
+            # Vừa hoàn thành lệnh gấp đôi (chuỗi 2 win xong) -> Quay về 5%
+            return unit_5pct, "Chốt chuỗi (Về 5%)"
+    else:
+        # Nếu vừa LOSE -> Luôn giữ nguyên mức chuẩn 5%
+        return unit_5pct, "Giữ nhịp (5%)"
+
+# --- 4. GIAO DIỆN CHÍNH ---
 st.markdown("<h3 style='text-align: center; color: #1F4E78;'>🎯 DỰ ĐOÁN & QUẢN LÝ VỐN 5% CƠ SỞ</h3>", unsafe_allow_html=True)
 
-# Đọc cấu hình vốn đã lưu
 cap_cfg = load_capital_config()
 
-# KHU VỰC CÀI ĐẶT THỜI GIAN & PHIÊN
 c_date, c_sess = st.columns(2)
 with c_date:
     selected_date = st.date_input("Ngày:", date.today())
 with c_sess:
     selected_session = st.selectbox("Phiên:", ["Phien 1 (Sang)", "Phien 2 (Trua)", "Phien 3 (Chieu)", "Phien 4 (Toi)"])
 
-# KHU VỰC 3 Ô VỐN QUẢN LÝ
 st.markdown("##### 💼 BẢNG QUẢN LÝ VỐN PHIÊN")
 c_v1, c_v2, c_v3 = st.columns(3)
 
@@ -152,11 +176,9 @@ with c_v2:
         help="Số dư vốn thực tế bạn đang có trước khi bắt đầu phiên này"
     )
 
-# Lưu lại nếu người dùng thay đổi vốn cơ sở hoặc vốn trước phiên
 if base_capital != cap_cfg.get("base_capital") or start_session_cap != cap_cfg.get("session_start_cap"):
     save_capital_config({"base_capital": base_capital, "session_start_cap": start_session_cap})
 
-# Tải lịch sử phiên hiện tại
 all_records = load_all_history()
 if all_records:
     df_all = pd.DataFrame(all_records)
@@ -167,7 +189,6 @@ else:
 
 next_stt = len(df_cur) + 1
 
-# Lãi / Lỗ lũy kế của phiên hiện tại
 cur_session_pnl = int(df_cur["money_pnl"].sum()) if not df_cur.empty else 0
 current_real_cap = start_session_cap + cur_session_pnl
 
@@ -178,14 +199,10 @@ with c_v3:
         delta=f"{'+' if cur_session_pnl >= 0 else ''}{cur_session_pnl:,} ({cur_session_pnl/base_capital*100:.2f}%)"
     )
 
-# Mức cược mỗi lệnh: ĐI ĐỀU 5% VỐN CƠ SỞ
-stake_amount = int(base_capital * 0.05)
-target_threshold = base_capital * 0.0475  # Target >= 4.75% hoặc 5%
+unit_base_5pct = int(base_capital * 0.05)
+target_threshold = base_capital * 0.0475
 
-# Kiểm tra điều kiện khóa phiên
 is_target_hit = cur_session_pnl >= target_threshold
-
-# Kiểm tra Lệnh 1 (Ván 4) nếu WIN thì khóa ngay
 is_round1_won = False
 if len(df_cur) >= 4:
     v4 = df_cur[df_cur["stt"] == 4]
@@ -194,11 +211,10 @@ if len(df_cur) >= 4:
 
 is_finished = is_target_hit or is_round1_won
 
-# BẢNG THÔNG BÁO TRẠNG THÁI TIẾN ĐỘ TARGET
 st.markdown("---")
 c_kpi1, c_kpi2 = st.columns(2)
-c_kpi1.metric("Mức cược chuẩn (5% vốn CS)", f"{stake_amount:,}")
-c_kpi2.metric("Mục tiêu phiên (>= 4.75% ~ 5%)", f"+{int(target_threshold):,} đến +{stake_amount:,}")
+c_kpi1.metric("Mức cược chuẩn (5% vốn CS)", f"{unit_base_5pct:,}")
+c_kpi2.metric("Mục tiêu phiên (>= 4.75% ~ 5%)", f"+{int(target_threshold):,} đến +{unit_base_5pct:,}")
 
 if is_finished:
     st.success(f"🎉 **ĐÃ HOÀN THÀNH MỤC TIÊU PHIÊN!** Lợi nhuận: **+{cur_session_pnl:,}** ({cur_session_pnl/base_capital*100:.2f}%) ➔ **KHÓA PHIÊN & NGHỈ NGƠI**.")
@@ -211,8 +227,8 @@ if is_finished:
     </div>
     """, unsafe_allow_html=True)
 else:
-    # HIỂN THỊ TÍN HIỆU VÁN TIẾP THEO
     pred_type, pred_target = get_prediction_info(next_stt, df_cur)
+    stake_amount, stake_note = get_next_stake(df_cur, base_capital, start_session_cap)
 
     if next_stt <= 3:
         moc_names = {1: "NHỎ / TO", 2: "LẺ / CHẴN", 3: "ĐEN / ĐỎ"}
@@ -223,14 +239,13 @@ else:
             <h4 style='margin:0; color:#333;'>TÍN HIỆU VÁN TIẾP THEO (STT: {next_stt})</h4>
             <h1 style='margin:6px 0; color:#C00000; font-size: 34px;'>👉 ĐÁNH: <b>{pred_target}</b></h1>
             <p style='margin:0; font-size: 16px; color:#1F4E78;'>
-                <b>{pred_type}</b> | Đi lệnh đều 5%: <b style='color:#C00000;'>{stake_amount:,}</b>
+                <b>{pred_type}</b> | Tiền cược: <b style='color:#C00000;'>{stake_amount:,}</b> ({stake_note})
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     st.write("")
 
-    # HÀM XỬ LÝ NHẬP VÁN
     def handle_round_submit(val_so):
         attr = ROULETTE_DATA.get(val_so, {"p1": "0", "p2": "0", "p3": "0", "p4": "0"})
         p1, p2, p3, p4 = attr["p1"], attr["p2"], attr["p3"], attr["p4"]
@@ -257,19 +272,17 @@ else:
                 "status": "Dữ liệu mốc"
             }
         else:
-            # So khớp theo đúng loại bàn cược
             if pred_type == "Bàn ĐEN / ĐỎ":
                 actual = p2
             elif pred_type == "Bàn LẺ / CHẴN":
                 actual = p4
-            else:  # Bàn NHỎ / TO
+            else:
                 actual = p3
 
             wl = "WIN" if actual == pred_target else "LOSE"
             pnl = stake_amount if wl == "WIN" else -stake_amount
             new_balance = current_real_cap + pnl
             
-            # Kiểm tra trạng thái
             new_pnl_session = cur_session_pnl + pnl
             if (next_stt == 4 and wl == "WIN") or (new_pnl_session >= target_threshold):
                 stat = "HOÀN THÀNH TARGET (KHÓA PHIÊN)"
