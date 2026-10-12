@@ -4,20 +4,38 @@ from datetime import datetime, timezone, timedelta
 import json
 import os
 import io
+import random
 
 st.set_page_config(
-    page_title="Hệ Thống Dự Đoán 4 Phiên - 5 Bàn (GMT+7)",
+    page_title="Hệ Thống Dự Đoán 4 Phiên - 5 Bàn (Random GMT+7)",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
 DB_FILE = "history_data.json"
 CONFIG_FILE = "config_capital.json"
+PATTERN_FILE = "table_patterns.json"
 
 # Lấy ngày hiện tại chuẩn múi giờ Việt Nam GMT+7
 VN_TZ = timezone(timedelta(hours=7))
 def get_current_vn_date():
     return datetime.now(VN_TZ).date()
+
+# 6 Tổ hợp xác suất hoán vị mốc (Mỗi phần tử gồm: (Tên loại cược, tên trường kết quả))
+PERMUTATIONS = [
+    # Cấu trúc 0: Nhỏ/To -> Lẻ/Chẵn -> Đen/Đỏ
+    [("Bàn NHỎ / TO", "player3"), ("Bàn LẺ / CHẴN", "player4"), ("Bàn ĐEN / ĐỎ", "player2")],
+    # Cấu trúc 1: Nhỏ/To -> Đen/Đỏ -> Lẻ/Chẵn
+    [("Bàn NHỎ / TO", "player3"), ("Bàn ĐEN / ĐỎ", "player2"), ("Bàn LẺ / CHẴN", "player4")],
+    # Cấu trúc 2: Lẻ/Chẵn -> Nhỏ/To -> Đen/Đỏ
+    [("Bàn LẺ / CHẴN", "player4"), ("Bàn NHỎ / TO", "player3"), ("Bàn ĐEN / ĐỎ", "player2")],
+    # Cấu trúc 3: Lẻ/Chẵn -> Đen/Đỏ -> Nhỏ/To
+    [("Bàn LẺ / CHẴN", "player4"), ("Bàn ĐEN / ĐỎ", "player2"), ("Bàn NHỎ / TO", "player3")],
+    # Cấu trúc 4: Đen/Đỏ -> Nhỏ/To -> Lẻ/Chẵn
+    [("Bàn ĐEN / ĐỎ", "player2"), ("Bàn NHỎ / TO", "player3"), ("Bàn LẺ / CHẴN", "player4")],
+    # Cấu trúc 5: Đen/Đỏ -> Lẻ/Chẵn -> Nhỏ/To
+    [("Bàn ĐEN / ĐỎ", "player2"), ("Bàn LẺ / CHẴN", "player4"), ("Bàn NHỎ / TO", "player3")],
+]
 
 # --- 1. LƯU TRỮ VÀ ĐỌC DỮ LIỆU ---
 def load_all_history():
@@ -49,6 +67,19 @@ def load_capital_config():
 def save_capital_config(config_dict):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(config_dict, f, ensure_ascii=False, indent=2)
+
+def load_patterns():
+    if not os.path.exists(PATTERN_FILE):
+        return {}
+    try:
+        with open(PATTERN_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_patterns(patterns_dict):
+    with open(PATTERN_FILE, "w", encoding="utf-8") as f:
+        json.dump(patterns_dict, f, ensure_ascii=False, indent=2)
 
 # Bảng tra cứu thuộc tính chuẩn Roulette 37 số (0 - 36)
 ROULETTE_DATA = {
@@ -91,8 +122,8 @@ ROULETTE_DATA = {
     36: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "CHẴN"},
 }
 
-# --- 2. LOGIC DỰ ĐOÁN (CHU KỲ NGƯỢC 3 VÁN) ---
-def get_prediction_info(stt, df_history):
+# --- 2. LOGIC DỰ ĐOÁN THEO CẤU TRÚC ĐÃ CHỌN ---
+def get_prediction_info(stt, df_history, pattern_idx):
     if stt <= 3:
         return "-", "-"
     
@@ -101,26 +132,25 @@ def get_prediction_info(stt, df_history):
         return "Chờ đủ dữ liệu", "-"
     
     step_in_block = (stt - 1) % 3
+    pattern = PERMUTATIONS[pattern_idx]
     
+    # Dự đoán đánh ngược lại thứ tự mốc (Mốc 3 -> Mốc 2 -> Mốc 1)
     if step_in_block == 0:
-        # Ván 4: Bàn ĐEN / ĐỎ -> lấy Ván 3
-        bet_type = "Bàn ĐEN / ĐỎ"
+        bet_type, col_name = pattern[2]
         target_row = df_history[df_history["stt"] == base_end_stt]
-        pred = target_row["player2"].values[0] if not target_row.empty else "-"
+        pred = target_row[col_name].values[0] if not target_row.empty else "-"
     elif step_in_block == 1:
-        # Ván 5: Bàn LẺ / CHẴN -> lấy Ván 2
-        bet_type = "Bàn LẺ / CHẴN"
+        bet_type, col_name = pattern[1]
         target_row = df_history[df_history["stt"] == (base_end_stt - 1)]
-        pred = target_row["player4"].values[0] if not target_row.empty else "-"
+        pred = target_row[col_name].values[0] if not target_row.empty else "-"
     else:
-        # Ván 6: Bàn NHỎ / TO -> lấy Ván 1
-        bet_type = "Bàn NHỎ / TO"
+        bet_type, col_name = pattern[0]
         target_row = df_history[df_history["stt"] == (base_end_stt - 2)]
-        pred = target_row["player3"].values[0] if not target_row.empty else "-"
+        pred = target_row[col_name].values[0] if not target_row.empty else "-"
         
     return bet_type, pred
 
-# --- 3. LOGIC TÍNH TIỀN CƯỢC THEO TỪNG BÀN ---
+# --- 3. LOGIC TÍNH TIỀN CƯỢC ---
 def get_next_stake(df_table, base_capital):
     unit_5pct = int(base_capital * 0.05)
     unit_10pct = unit_5pct * 2
@@ -130,17 +160,14 @@ def get_next_stake(df_table, base_capital):
     if len(df_table) == 3:
         return unit_5pct, "Lệnh 1 (5%)"
     
-    # Tính PnL lũy kế riêng của bàn này
     table_pnl = df_table["money_pnl"].sum()
     last_row = df_table.iloc[-1]
     last_wl = last_row["win_lose"]
     last_stake = last_row["stake_amount"]
     
-    # Nếu bàn đang hòa hoặc có lãi: Luôn đánh 5%
     if table_pnl >= 0:
         return unit_5pct, "Đủ vốn (5%)"
     
-    # Nếu bàn đang bị âm:
     if last_wl == "WIN":
         if last_stake == unit_5pct:
             return unit_10pct, "Săn 2 WIN (Gấp đôi 10%)"
@@ -162,17 +189,14 @@ with c_date:
 with c_sess:
     selected_session = st.selectbox("Phiên:", ["Phien 1 (Sang)", "Phien 2 (Trua)", "Phien 3 (Chieu)", "Phien 4 (Toi)"])
 
-# Đọc toàn bộ dữ liệu
 all_records = load_all_history()
 if all_records:
     df_all = pd.DataFrame(all_records)
-    # Lọc theo Ngày + Phiên
     df_sess = df_all[(df_all["session_date"] == str(selected_date)) & (df_all["session_name"] == selected_session)].copy()
 else:
     df_all = pd.DataFrame()
     df_sess = pd.DataFrame()
 
-# Kiểm tra trạng thái 5 bàn trong phiên đã chọn
 table_names = [f"Bàn {i}" for i in range(1, 6)]
 table_options = []
 
@@ -201,7 +225,6 @@ with c_tbl:
     selected_table_display = st.selectbox("Chọn Bàn Chơi:", table_options)
     selected_table = selected_table_display.split(" ")[0] + " " + selected_table_display.split(" ")[1]
 
-# Lọc dữ liệu riêng của bàn hiện tại
 if not df_sess.empty and "table_name" in df_sess.columns:
     df_cur = df_sess[df_sess["table_name"] == selected_table].copy()
 else:
@@ -234,7 +257,6 @@ with c_v2:
 if base_capital != cap_cfg.get("base_capital") or start_session_cap != cap_cfg.get("session_start_cap"):
     save_capital_config({"base_capital": base_capital, "session_start_cap": start_session_cap})
 
-# Tính lũy kế toàn phiên và của riêng bàn
 session_total_pnl = int(df_sess["money_pnl"].sum()) if not df_sess.empty else 0
 table_pnl = int(df_cur["money_pnl"].sum()) if not df_cur.empty else 0
 current_real_cap = start_session_cap + session_total_pnl
@@ -246,7 +268,37 @@ with c_v3:
         delta=f"{'+' if session_total_pnl >= 0 else ''}{session_total_pnl:,} (Cả phiên)"
     )
 
-# KIỂM TRA ĐIỀU KIỆN KHÓA BÀN HIỆN TẠI (5% VỐN CƠ SỞ)
+# --- 5. QUẢN LÝ CẤU TRÚC RANDOM CỦA TỪNG BÀN ---
+patterns_all = load_patterns()
+table_key = f"{selected_date}_{selected_session}_{selected_table}"
+current_pattern_idx = patterns_all.get(table_key, 0)
+
+# Khung chọn & Random cấu trúc cho bàn
+st.markdown("---")
+col_pat1, col_pat2 = st.columns([2.2, 1])
+
+with col_pat2:
+    if st.button("🎲 RANDOM CẤU TRÚC", use_container_width=True, help="Bốc ngẫu nhiên 1 trong 6 cấu trúc cho bàn này"):
+        new_idx = random.randint(0, 5)
+        patterns_all[table_key] = new_idx
+        save_patterns(patterns_all)
+        st.rerun()
+
+pat_data = PERMUTATIONS[current_pattern_idx]
+m1_name = pat_data[0][0].replace("Bàn ", "")
+m2_name = pat_data[1][0].replace("Bàn ", "")
+m3_name = pat_data[2][0].replace("Bàn ", "")
+
+with col_pat1:
+    st.markdown(f"""
+    <div style='background-color: #F2F4F7; padding: 8px 12px; border-radius: 8px; border: 1px solid #D0D5DD;'>
+        <span style='font-size: 13px; color: #475467;'><b>Cấu trúc {selected_table}:</b></span><br>
+        <b style='color: #1F4E78;'>Mốc:</b> {m1_name} ➔ {m2_name} ➔ {m3_name} <br>
+        <b style='color: #C00000;'>Đánh:</b> {m3_name} ➔ {m2_name} ➔ {m1_name}
+    </div>
+    """, unsafe_allow_html=True)
+
+# KIỂM TRA ĐIỀU KIỆN KHÓA BÀN
 unit_base_5pct = int(base_capital * 0.05)
 target_threshold = base_capital * 0.0475
 
@@ -260,7 +312,7 @@ if len(df_cur) >= 4:
 is_table_locked = is_table_target_hit or is_round1_won
 
 # TIẾN ĐỘ 5 BÀN CỦA PHIÊN
-st.markdown("---")
+st.write("")
 st.markdown(f"**Tiến độ 5 Bàn của {selected_session}:**")
 p_cols = st.columns(5)
 for idx, t_opt in enumerate(table_options):
@@ -273,7 +325,7 @@ c_kpi1, c_kpi2 = st.columns(2)
 c_kpi1.metric("Mức cược chuẩn (5% vốn CS)", f"{unit_base_5pct:,}")
 c_kpi2.metric("Lợi nhuận riêng bàn này", f"{'+' if table_pnl >= 0 else ''}{table_pnl:,}", f"Target: +{unit_base_5pct:,}")
 
-# NẾU BÀN ĐÃ HOÀN THÀNH -> KHÓA BÀN VÀ KHÔNG CHO MỞ RA NỮA
+# NẾU BÀN ĐÃ HOÀN THÀNH -> KHÓA BÀN
 if is_table_locked:
     st.success(f"🎉 **{selected_table.upper()} ĐÃ HOÀN THÀNH TARGET 5% (+{table_pnl:,})!**")
     st.markdown(f"""
@@ -286,13 +338,12 @@ if is_table_locked:
     </div>
     """, unsafe_allow_html=True)
 else:
-    # HIỂN THỊ TÍN HIỆU VÀ NÚT ĐÁNH
-    pred_type, pred_target = get_prediction_info(next_stt, df_cur)
+    pred_type, pred_target = get_prediction_info(next_stt, df_cur, current_pattern_idx)
     stake_amount, stake_note = get_next_stake(df_cur, base_capital)
 
     if next_stt <= 3:
-        moc_names = {1: "NHỎ / TO", 2: "LẺ / CHẴN", 3: "ĐEN / ĐỎ"}
-        st.info(f"⏳ **{selected_table} - Ván mốc {next_stt}/3 (Mốc {moc_names[next_stt]}):** Nhập kết quả lấy mốc tín hiệu")
+        current_moc_name = pat_data[next_stt - 1][0].replace("Bàn ", "")
+        st.info(f"⏳ **{selected_table} - Ván mốc {next_stt}/3 (Mốc {current_moc_name}):** Nhập kết quả lấy mốc tín hiệu")
     else:
         st.markdown(f"""
         <div style='background-color: #FFF2CC; padding: 16px; border-radius: 12px; border: 2px solid #D6B656; text-align: center;'>
@@ -480,7 +531,7 @@ if not df_cur.empty:
     show_df.columns = ["STT", "Số", "Dự Đoán", "Ra", "W/L", "Tiền Cược", "Lãi/Lỗ", "Vốn Hiện Tại", "Trạng Thái"]
     st.dataframe(show_df, use_container_width=True)
 else:
-    st.write(f"Chưa có ván nào trong {selected_table}. Hãy nhập 3 ván đầu tiên để bắt đầu.")
+    st.write(f"Chưa có ván nào trong {selected_table}. Bấm nút Random cấu trúc rồi nhập 3 ván đầu tiên để bắt đầu.")
 
 # NÚT RESET TOÀN BỘ HỆ THỐNG / NÂNG VỐN THÁNG MỚI
 with st.expander("⚙️ Quản trị: Reset toàn bộ hệ thống để nâng vốn mới"):
@@ -489,5 +540,6 @@ with st.expander("⚙️ Quản trị: Reset toàn bộ hệ thống để nâng
     if confirm_reset:
         if st.button("🔴 TIẾN HÀNH RESET TOÀN BỘ HỆ THỐNG", use_container_width=True):
             save_all_history([])
-            st.success("Đã xóa sạch dữ liệu lưu trữ! Bạn có thể nhập vốn cơ sở mới.")
+            save_patterns({})
+            st.success("Đã xóa sạch dữ liệu lưu trữ! Bạn có thể bắt đầu lại.")
             st.rerun()
