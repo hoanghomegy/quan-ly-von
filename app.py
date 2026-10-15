@@ -7,7 +7,7 @@ import io
 import random
 
 st.set_page_config(
-    page_title="Hệ Thống Dự Đoán 4 Phiên - 5 Bàn (Random GMT+7)",
+    page_title="Hệ Thống Dự Đoán 4 Phiên - 5 Bàn (GMT+7)",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -21,19 +21,13 @@ VN_TZ = timezone(timedelta(hours=7))
 def get_current_vn_date():
     return datetime.now(VN_TZ).date()
 
-# 6 Tổ hợp xác suất hoán vị mốc (Mỗi phần tử gồm: (Tên loại cược, tên trường kết quả))
+# 6 Tổ hợp xác suất hoán vị mốc (Tên bàn, tên trường kết quả)
 PERMUTATIONS = [
-    # Cấu trúc 0: Nhỏ/To -> Lẻ/Chẵn -> Đen/Đỏ
     [("Bàn NHỎ / TO", "player3"), ("Bàn LẺ / CHẴN", "player4"), ("Bàn ĐEN / ĐỎ", "player2")],
-    # Cấu trúc 1: Nhỏ/To -> Đen/Đỏ -> Lẻ/Chẵn
     [("Bàn NHỎ / TO", "player3"), ("Bàn ĐEN / ĐỎ", "player2"), ("Bàn LẺ / CHẴN", "player4")],
-    # Cấu trúc 2: Lẻ/Chẵn -> Nhỏ/To -> Đen/Đỏ
     [("Bàn LẺ / CHẴN", "player4"), ("Bàn NHỎ / TO", "player3"), ("Bàn ĐEN / ĐỎ", "player2")],
-    # Cấu trúc 3: Lẻ/Chẵn -> Đen/Đỏ -> Nhỏ/To
     [("Bàn LẺ / CHẴN", "player4"), ("Bàn ĐEN / ĐỎ", "player2"), ("Bàn NHỎ / TO", "player3")],
-    # Cấu trúc 4: Đen/Đỏ -> Nhỏ/To -> Lẻ/Chẵn
     [("Bàn ĐEN / ĐỎ", "player2"), ("Bàn NHỎ / TO", "player3"), ("Bàn LẺ / CHẴN", "player4")],
-    # Cấu trúc 5: Đen/Đỏ -> Lẻ/Chẵn -> Nhỏ/To
     [("Bàn ĐEN / ĐỎ", "player2"), ("Bàn LẺ / CHẴN", "player4"), ("Bàn NHỎ / TO", "player3")],
 ]
 
@@ -122,42 +116,55 @@ ROULETTE_DATA = {
     36: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "CHẴN"},
 }
 
-# --- 2. LOGIC DỰ ĐOÁN THEO CẤU TRÚC ĐÃ CHỌN ---
-def get_prediction_info(stt, df_history, pattern_idx):
-    if stt <= 3:
+# --- 2. LOGIC LẤY PHÂN KHÚC SAU LẦN RA SỐ 0 GẦN NHẤT ---
+def get_effective_table_df(df_cur):
+    """Lấy danh sách các ván sau lần xuất hiện số 0 gần nhất"""
+    if df_cur.empty:
+        return pd.DataFrame(), 0
+    zero_indices = df_cur[df_cur["kq_so"] == 0].index.tolist()
+    if not zero_indices:
+        return df_cur.copy(), 0
+    last_zero_idx = zero_indices[-1]
+    df_effective = df_cur.loc[last_zero_idx + 1:].copy()
+    return df_effective, len(zero_indices)
+
+# --- 3. LOGIC DỰ ĐOÁN (CHU KỲ NGƯỢC 3 VÁN TRÊN KHÚC HIỆU LỰC) ---
+def get_prediction_info(df_effective, pattern_idx):
+    stt_eff = len(df_effective) + 1
+    if stt_eff <= 3:
         return "-", "-"
     
-    base_end_stt = ((stt - 1) // 3) * 3
-    if len(df_history) < base_end_stt:
+    base_end_idx = ((stt_eff - 1) // 3) * 3
+    if len(df_effective) < base_end_idx:
         return "Chờ đủ dữ liệu", "-"
     
-    step_in_block = (stt - 1) % 3
+    step_in_block = (stt_eff - 1) % 3
     pattern = PERMUTATIONS[pattern_idx]
     
-    # Dự đoán đánh ngược lại thứ tự mốc (Mốc 3 -> Mốc 2 -> Mốc 1)
+    # Dự đoán đánh ngược mốc (Mốc 3 -> Mốc 2 -> Mốc 1)
     if step_in_block == 0:
         bet_type, col_name = pattern[2]
-        target_row = df_history[df_history["stt"] == base_end_stt]
-        pred = target_row[col_name].values[0] if not target_row.empty else "-"
+        target_row = df_effective.iloc[base_end_idx - 1]
+        pred = target_row[col_name]
     elif step_in_block == 1:
         bet_type, col_name = pattern[1]
-        target_row = df_history[df_history["stt"] == (base_end_stt - 1)]
-        pred = target_row[col_name].values[0] if not target_row.empty else "-"
+        target_row = df_effective.iloc[base_end_idx - 2]
+        pred = target_row[col_name]
     else:
         bet_type, col_name = pattern[0]
-        target_row = df_history[df_history["stt"] == (base_end_stt - 2)]
-        pred = target_row[col_name].values[0] if not target_row.empty else "-"
+        target_row = df_effective.iloc[base_end_idx - 3]
+        pred = target_row[col_name]
         
     return bet_type, pred
 
-# --- 3. LOGIC TÍNH TIỀN CƯỢC ---
-def get_next_stake(df_table, base_capital):
+# --- 4. LOGIC TÍNH TIỀN CƯỢC ---
+def get_next_stake(df_table, df_effective, base_capital):
     unit_5pct = int(base_capital * 0.05)
     unit_10pct = unit_5pct * 2
     
-    if len(df_table) < 3:
+    if len(df_effective) < 3:
         return 0, "Mốc"
-    if len(df_table) == 3:
+    if len(df_effective) == 3:
         return unit_5pct, "Lệnh 1 (5%)"
     
     table_pnl = df_table["money_pnl"].sum()
@@ -176,7 +183,7 @@ def get_next_stake(df_table, base_capital):
     else:
         return unit_5pct, "Giữ nhịp (5%)"
 
-# --- 4. GIAO DIỆN CHÍNH ---
+# --- 5. GIAO DIỆN CHÍNH ---
 st.markdown("<h3 style='text-align: center; color: #1F4E78;'>🎯 QUẢN LÝ VỐN 4 PHIÊN - 5 BÀN (GMT+7)</h3>", unsafe_allow_html=True)
 
 cap_cfg = load_capital_config()
@@ -202,6 +209,7 @@ table_options = []
 
 base_cap_default = int(cap_cfg.get("base_capital", 4000))
 target_threshold_table = base_cap_default * 0.0475
+stop_loss_threshold_table = -base_cap_default * 0.15  # Cắt lỗ -15%
 
 for t_name in table_names:
     if not df_sess.empty and "table_name" in df_sess.columns:
@@ -218,6 +226,8 @@ for t_name in table_names:
     
     if t_pnl >= target_threshold_table or t_round1_won:
         table_options.append(f"{t_name} 🔒 (Xong 5%)")
+    elif t_pnl <= stop_loss_threshold_table:
+        table_options.append(f"{t_name} 🔒 (Cắt lỗ -15%)")
     else:
         table_options.append(t_name)
 
@@ -231,6 +241,8 @@ else:
     df_cur = pd.DataFrame()
 
 next_stt = len(df_cur) + 1
+df_effective, zero_count = get_effective_table_df(df_cur)
+eff_stt = len(df_effective) + 1
 
 # BẢNG 3 Ô VỐN QUẢN LÝ
 st.markdown("##### 💼 BẢNG QUẢN LÝ VỐN")
@@ -268,17 +280,16 @@ with c_v3:
         delta=f"{'+' if session_total_pnl >= 0 else ''}{session_total_pnl:,} (Cả phiên)"
     )
 
-# --- 5. QUẢN LÝ CẤU TRÚC RANDOM CỦA TỪNG BÀN ---
+# --- 6. QUẢN LÝ CẤU TRÚC RANDOM CỦA TỪNG BÀN ---
 patterns_all = load_patterns()
 table_key = f"{selected_date}_{selected_session}_{selected_table}"
 current_pattern_idx = patterns_all.get(table_key, 0)
 
-# Khung chọn & Random cấu trúc cho bàn
 st.markdown("---")
 col_pat1, col_pat2 = st.columns([2.2, 1])
 
 with col_pat2:
-    if st.button("🎲 RANDOM CẤU TRÚC", use_container_width=True, help="Bốc ngẫu nhiên 1 trong 6 cấu trúc cho bàn này"):
+    if st.button("🎲 RANDOM CẤU TRÚC", use_container_width=True, help="Bốc ngẫu nhiên cấu trúc"):
         new_idx = random.randint(0, 5)
         patterns_all[table_key] = new_idx
         save_patterns(patterns_all)
@@ -298,9 +309,10 @@ with col_pat1:
     </div>
     """, unsafe_allow_html=True)
 
-# KIỂM TRA ĐIỀU KIỆN KHÓA BÀN
+# KIỂM TRA ĐIỀU KIỆN KHÓA BÀN (TARGET 5% HOẶC CẮT LỖ -15%)
 unit_base_5pct = int(base_capital * 0.05)
 target_threshold = base_capital * 0.0475
+stop_threshold = -base_capital * 0.15
 
 is_table_target_hit = table_pnl >= target_threshold
 is_round1_won = False
@@ -309,41 +321,59 @@ if len(df_cur) >= 4:
     if not v4.empty and v4["win_lose"].values[0] == "WIN":
         is_round1_won = True
 
-is_table_locked = is_table_target_hit or is_round1_won
+is_table_stop_hit = table_pnl <= stop_threshold
 
 # TIẾN ĐỘ 5 BÀN CỦA PHIÊN
 st.write("")
 st.markdown(f"**Tiến độ 5 Bàn của {selected_session}:**")
 p_cols = st.columns(5)
 for idx, t_opt in enumerate(table_options):
-    if "🔒" in t_opt:
+    if "Xong 5%" in t_opt:
         p_cols[idx].success(f"{table_names[idx]}: ✅ XONG")
+    elif "Cắt lỗ" in t_opt:
+        p_cols[idx].error(f"{table_names[idx]}: 🛑 LỖ -15%")
     else:
-        p_cols[idx].info(f"{table_names[idx]}: ⏳ CHƯA XONG")
+        p_cols[idx].info(f"{table_names[idx]}: ⏳ ĐANG ĐÁNH")
 
 c_kpi1, c_kpi2 = st.columns(2)
 c_kpi1.metric("Mức cược chuẩn (5% vốn CS)", f"{unit_base_5pct:,}")
-c_kpi2.metric("Lợi nhuận riêng bàn này", f"{'+' if table_pnl >= 0 else ''}{table_pnl:,}", f"Target: +{unit_base_5pct:,}")
+c_kpi2.metric("Lợi nhuận bàn này", f"{'+' if table_pnl >= 0 else ''}{table_pnl:,}", f"Target: +{unit_base_5pct:,} | Cut: {stop_threshold:,}")
 
-# NẾU BÀN ĐÃ HOÀN THÀNH -> KHÓA BÀN
-if is_table_locked:
+# NẾU BÀN ĐẠT TARGET +5% -> KHÓA BÀN
+if is_table_target_hit or is_round1_won:
     st.success(f"🎉 **{selected_table.upper()} ĐÃ HOÀN THÀNH TARGET 5% (+{table_pnl:,})!**")
     st.markdown(f"""
     <div style='background-color: #E2EFDA; padding: 20px; border-radius: 12px; border: 2px solid #375623; text-align: center;'>
         <h2 style='margin:0; color: #276A3C;'>🔒 {selected_table.upper()} ĐÃ ĐƯỢC TỰ ĐỘNG KHÓA</h2>
         <p style='margin: 8px 0 0 0; font-size: 16px; color: #333;'>
-            Mục tiêu 5% của bàn này đã đạt. Hệ thống khóa hoàn toàn để bảo toàn lợi nhuận.<br>
-            👉 <b>Hãy chọn Bàn tiếp theo</b> chưa hoàn thành trong phiên này. Sang ngày hôm sau (00:00 GMT+7) hệ thống sẽ mở lại từ đầu.
+            Mục tiêu 5% đã đạt. Hệ thống khóa hoàn toàn để bảo toàn lợi nhuận.<br>
+            👉 <b>Hãy chọn Bàn tiếp theo</b> chưa hoàn thành trong phiên này.
         </p>
     </div>
     """, unsafe_allow_html=True)
-else:
-    pred_type, pred_target = get_prediction_info(next_stt, df_cur, current_pattern_idx)
-    stake_amount, stake_note = get_next_stake(df_cur, base_capital)
 
-    if next_stt <= 3:
-        current_moc_name = pat_data[next_stt - 1][0].replace("Bàn ", "")
-        st.info(f"⏳ **{selected_table} - Ván mốc {next_stt}/3 (Mốc {current_moc_name}):** Nhập kết quả lấy mốc tín hiệu")
+# NẾU BÀN BỊ ÂM ĐẠT MỐC CẮT LỖ -15% -> TỰ ĐỘNG KHÓA VÀ AUTO ĐỔI CẤU TRÚC
+elif is_table_stop_hit:
+    st.error(f"🛑 **{selected_table.upper()} ĐÃ CHẠM NGƯỠNG CẮT LỖ -15% ({table_pnl:,})!**")
+    st.markdown(f"""
+    <div style='background-color: #FCE8E6; padding: 20px; border-radius: 12px; border: 2px solid #C5221F; text-align: center;'>
+        <h2 style='margin:0; color: #C5221F;'>🔒 {selected_table.upper()} ĐÃ TỰ ĐỘNG KHÓA CẮT LỖ</h2>
+        <p style='margin: 8px 0 0 0; font-size: 16px; color: #333;'>
+            Bàn đã chạm giới hạn an toàn -15%. Hệ thống tự động khóa để bảo toàn vốn và <b>đã tự động đổi sang cấu trúc mới</b>.<br>
+            👉 Hãy chuyển sang Bàn khác hoặc nghỉ ngơi để bảo toàn vốn phiên.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+else:
+    # HIỂN THỊ TÍN HIỆU VÀ FORM NHẬP
+    pred_type, pred_target = get_prediction_info(df_effective, current_pattern_idx)
+    stake_amount, stake_note = get_next_stake(df_cur, df_effective, base_capital)
+
+    if eff_stt <= 3:
+        current_moc_name = pat_data[eff_stt - 1][0].replace("Bàn ", "")
+        extra_note = f" (Sau ván số 0)" if zero_count > 0 else ""
+        st.info(f"⏳ **{selected_table} - Ván mốc {eff_stt}/3 (Mốc {current_moc_name}){extra_note}:** Nhập kết quả lấy mốc tín hiệu")
     else:
         st.markdown(f"""
         <div style='background-color: #FFF2CC; padding: 16px; border-radius: 12px; border: 2px solid #D6B656; text-align: center;'>
@@ -365,7 +395,44 @@ else:
         
         all_recs = load_all_history()
         
-        if next_stt <= 3:
+        # XỬ LÝ TRƯỜNG HỢP RA SỐ 0: TỰ ĐỘNG ĐỔI CẤU TRÚC VÀ RESET MỐC
+        if val_so == 0:
+            wl = "LOSE" if eff_stt > 3 else "MỐC"
+            pnl = -stake_amount if eff_stt > 3 else 0
+            new_balance = current_real_cap + pnl
+            
+            new_row = {
+                "session_date": str(selected_date),
+                "session_name": selected_session,
+                "table_name": selected_table,
+                "stt": next_stt,
+                "kq_so": 0,
+                "player1": "0",
+                "player2": "0",
+                "player3": "0",
+                "player4": "0",
+                "bet_type": pred_type if eff_stt > 3 else "-",
+                "prediction": pred_target if eff_stt > 3 else "-",
+                "actual_result": "0",
+                "win_lose": wl,
+                "stake_amount": stake_amount if eff_stt > 3 else 0,
+                "money_pnl": pnl,
+                "cur_balance": new_balance,
+                "status": "RA SỐ 0 (RESET MỐC & AUTO ĐỔI CẤU TRÚC)"
+            }
+            all_recs.append(new_row)
+            save_all_history(all_recs)
+            
+            # TỰ ĐỘNG ĐỔI CẤU TRÚC RANDOM MỚI
+            pats = load_patterns()
+            new_p_idx = random.choice([i for i in range(6) if i != current_pattern_idx])
+            pats[table_key] = new_p_idx
+            save_patterns(pats)
+            st.rerun()
+            return
+        
+        # NẾU ĐANG TRONG 3 VÁN MỐC
+        if eff_stt <= 3:
             new_row = {
                 "session_date": str(selected_date),
                 "session_name": selected_session,
@@ -396,10 +463,17 @@ else:
             wl = "WIN" if actual == pred_target else "LOSE"
             pnl = stake_amount if wl == "WIN" else -stake_amount
             new_balance = current_real_cap + pnl
-            
             new_t_pnl = table_pnl + pnl
+            
             if (next_stt == 4 and wl == "WIN") or (new_t_pnl >= target_threshold):
                 stat = "HOÀN THÀNH TARGET (KHÓA BÀN)"
+            elif new_t_pnl <= stop_threshold:
+                stat = "CHẠM CẮT LỖ -15% (KHÓA BÀN)"
+                # TỰ ĐỘNG ĐỔI CẤU TRÚC CHO LẦN SAU
+                pats = load_patterns()
+                new_p_idx = random.choice([i for i in range(6) if i != current_pattern_idx])
+                pats[table_key] = new_p_idx
+                save_patterns(pats)
             else:
                 stat = "TIẾP TỤC"
                 
