@@ -6,7 +6,7 @@ import os
 import io
 
 st.set_page_config(
-    page_title="Baccarat 8-Bot Oscar's Grind Algorithm",
+    page_title="Baccarat 8-Bot Oscar's Grind Algorithm (Chuẩn Video Rafael)",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -64,12 +64,6 @@ BOT_SPECS = [
 ]
 
 def simulate_bots(history_hands):
-    """
-    history_hands: list of results ('P', 'B')
-    Trả về:
-    - bot_states: dict chứa thông tin từng bot (chuỗi loss hiện tại, chu kỳ PnL, mức cược Oscar Grind tiếp theo)
-    - next_preds: dict chứa dự đoán ván tiếp theo của từng bot ('P', 'B' hoặc None)
-    """
     bot_stats = {
         b["name"]: {
             "loss_streak": 0,
@@ -81,7 +75,6 @@ def simulate_bots(history_hands):
         } for b in BOT_SPECS
     }
 
-    # Chạy mô phỏng từng ván từ đầu khay bài đến hiện tại
     for i, actual in enumerate(history_hands):
         past = history_hands[:i]
         for b in BOT_SPECS:
@@ -89,13 +82,11 @@ def simulate_bots(history_hands):
             lag = b["lag"]
             opp = b["opp"]
             
-            # Tính dự đoán của bot cho ván i
             pred = None
             if len(past) >= lag:
                 ref = past[-lag]
                 pred = ('P' if ref == 'B' else 'B') if opp else ref
             
-            # Cập nhật kết quả sau ván i
             if pred is not None:
                 win = (actual == pred)
                 stk = bot_stats[name]["og_stake"]
@@ -115,9 +106,7 @@ def simulate_bots(history_hands):
                     bot_stats[name]["win_streak"] = 0
                     bot_stats[name]["cycle_pnl"] -= stk
                     bot_stats[name]["total_pnl"] -= stk
-                    # Thua: giữ nguyên mức cược theo Oscar's Grind
                     
-    # Dự đoán ván kế tiếp
     next_preds = {}
     for b in BOT_SPECS:
         name = b["name"]
@@ -131,41 +120,59 @@ def simulate_bots(history_hands):
 
     return bot_stats, next_preds
 
-# --- 3. THUẬT TOÁN QUYẾT ĐỊNH ĐIỂM VÀO LỆNH & TIỀN CƯỢC ---
-def get_system_signal(bot_stats, next_preds, user_cycle_pnl, user_current_stake):
+# --- 3. THUẬT TOÁN ĐIỂM VÀO LỆNH & QUẢN LÝ VỐN CHUẨN XÁC ---
+def get_system_signal(history_hands, bot_stats, next_preds, user_cycle_pnl, user_current_stake, last_bet_won):
     """
-    Quyết định cửa đánh (Player / Banker / No Bet) và số tiền cược theo Oscar's Grind
+    Chuẩn hóa logic thực chiến của Mister Rafael:
+    1. Cần tối thiểu 2 ván mồi đầu tiên (P/B). Ván thứ 3 vào lệnh ngay!
+    2. Chỉ SKIP (No Bet) đúng 1 ván ngay sau khi vừa WIN chạm đích +1 unit chu kỳ.
+    3. Hết ván SKIP là phải vào lệnh ngay theo nhịp chiếm ưu thế.
     """
-    # Nếu chưa đủ dữ liệu tối thiểu 2 ván
-    valid_preds = [p for p in next_preds.values() if p is not None]
-    if len(valid_preds) < 4:
-        return "NO BET", 0, "Chờ đủ dữ liệu ván mồi"
+    total_hands = len(history_hands)
+    
+    # Chưa đủ 2 ván mồi
+    if total_hands < 2:
+        return "NO BET", 0, f"Nhập đủ 2 ván mồi đầu tiên (Hiện tại: {total_hands}/2)"
 
-    # 1. Tính trọng số áp lực chuỗi thua của từng phe
+    # Nếu vừa mới chiến thắng ở ván cược trước và chu kỳ đạt +1 unit -> Nghỉ đúng 1 ván (Free Hand)
+    if last_bet_won and user_cycle_pnl == 0:
+        return "NO BET", 0, "Chốt chu kỳ +1 unit -> Nghỉ quan sát 1 ván (Free hand)"
+
+    # Phân loại dự đoán của các bot
     p_bots = [name for name, p in next_preds.items() if p == "P"]
     b_bots = [name for name, p in next_preds.items() if p == "B"]
 
+    # Điểm ưu thế theo chuỗi thua (bắt đáy) và chuỗi thắng (bám trend)
     max_p_loss = max([bot_stats[b]["loss_streak"] for b in p_bots]) if p_bots else 0
     max_b_loss = max([bot_stats[b]["loss_streak"] for b in b_bots]) if b_bots else 0
     
-    # 2. Cơ chế bắt đáy chuỗi thua (Fade the Loser)
+    max_p_win = max([bot_stats[b]["win_streak"] for b in p_bots]) if p_bots else 0
+    max_b_win = max([bot_stats[b]["win_streak"] for b in b_bots]) if b_bots else 0
+
     chosen_side = None
     reason = ""
 
+    # Ưu tiên 1: Bắt đáy nếu có bot thua thông từ 2 ván trở lên
     if max_p_loss >= 2 and max_p_loss > max_b_loss:
         chosen_side = "PLAYER"
-        reason = f"Bắt đáy phe Player (Có bot thua thông {max_p_loss} ván)"
+        reason = f"Bắt đáy phe Player (Bot thua thông {max_p_loss} ván)"
     elif max_b_loss >= 2 and max_b_loss > max_p_loss:
         chosen_side = "BANKER"
-        reason = f"Bắt đáy phe Banker (Có bot thua thông {max_b_loss} ván)"
-    elif max_p_loss == max_b_loss and max_p_loss >= 2:
-        # Nếu cả 2 bên đều có bot thua thông cân bằng -> Vùng tranh chấp -> Skip
-        return "NO BET", 0, "Tranh chấp cân bằng (Skip)"
+        reason = f"Bắt đáy phe Banker (Bot thua thông {max_b_loss} ván)"
+    # Ưu tiên 2: Bám theo trend bot đang có phong độ thắng cao nhất
+    elif max_p_win > max_b_win:
+        chosen_side = "PLAYER"
+        reason = f"Bám trend Player theo bot đang đỏ (Chuỗi thắng {max_p_win} ván)"
+    elif max_b_win > max_p_win:
+        chosen_side = "BANKER"
+        reason = f"Bám trend Banker theo bot đang đỏ (Chuỗi thắng {max_b_win} ván)"
+    # Mặc định: Theo ván liền kề trước (Follow Last - Tom)
     else:
-        # Không có bot nào rơi vào chuỗi thua sâu đủ điều kiện lọc
-        return "NO BET", 0, "Chờ nhịp lệch chuẩn (Skip)"
+        last_result = history_hands[-1]
+        chosen_side = "PLAYER" if last_result == "P" else "BANKER"
+        reason = f"Đánh theo nhịp ván gần nhất ({chosen_side})"
 
-    # 3. Tính tiền cược theo Oscar's Grind của tài khoản thật
+    # Tính số tiền cược theo Oscar's Grind
     stake = user_current_stake
     if user_cycle_pnl >= 0:
         stake = 1
@@ -177,12 +184,11 @@ def get_system_signal(bot_stats, next_preds, user_cycle_pnl, user_current_stake)
 
 # --- 4. GIAO DIỆN CHÍNH (STREAMLIT UI) ---
 st.markdown("<h2 style='text-align: center; color: #1F4E78;'>🎯 HỆ THỐNG BACCARAT 8-BOT OSCAR'S GRIND</h2>", unsafe_allow_html=True)
-st.caption("<div style='text-align: center;'>Thuật toán bóc tách từ Mister Rafael | Quản lý vốn Lãi Kép 5%</div>", unsafe_allow_html=True)
+st.caption("<div style='text-align: center;'>Thuật toán chuẩn Mister Rafael | Vào lệnh ngay sau 2 ván mồi</div>", unsafe_allow_html=True)
 
 cfg = load_config()
 today_vn = get_current_vn_date()
 
-# SIDEBAR: CÀI ĐẶT VỐN & LÃI KÉP
 with st.sidebar:
     st.markdown("### 💼 Quản Lý Vốn Lãi Kép")
     acc_bal = st.number_input("Tổng số dư tài khoản ($):", min_value=10, value=int(cfg["account_balance"]), step=50)
@@ -206,7 +212,6 @@ with st.sidebar:
     st.markdown(f"**Mục tiêu lợi nhuận:** `+{target_profit}$` ({target_pct}%)")
     st.markdown(f"**Số dư đích đến:** `{target_balance:,}$`")
 
-# BỘ CHỌN NGÀY & PHIÊN
 c_date, c_sess = st.columns(2)
 with c_date:
     selected_date = st.date_input("Ngày (GMT+7):", today_vn)
@@ -221,35 +226,37 @@ else:
     df_all = pd.DataFrame()
     df_cur = pd.DataFrame()
 
-# Lấy danh sách kết quả bài đã ra trong phiên (chỉ lấy P và B, bỏ qua Tie)
 history_hands = []
 if not df_cur.empty:
     history_hands = [h for h in df_cur["actual_result"].tolist() if h in ["P", "B"]]
 
-# Lũy kế lợi nhuận phiên
 session_pnl = int(df_cur["money_pnl"].sum()) if not df_cur.empty else 0
 current_acc_balance = acc_bal + session_pnl
 
-# Trạng thái Oscar's Grind của người dùng
+# Tính trạng thái chu kỳ Oscar's Grind của người dùng
 user_cycle_pnl = 0
 user_current_stake = 1
+last_bet_won = False
+
 for _, row in df_cur.iterrows():
     if row["action"] in ["PLAYER", "BANKER"]:
         pnl = row["money_pnl"]
         user_cycle_pnl += pnl
-        if pnl > 0:  # Thắng
+        if pnl > 0:
+            last_bet_won = True
             if user_cycle_pnl >= 1:
                 user_cycle_pnl = 0
                 user_current_stake = 1
             else:
                 user_current_stake = min(user_current_stake + 1, 1 - user_cycle_pnl)
-        else:  # Thua
-            pass  # Giữ nguyên cược
+        else:
+            last_bet_won = False
+    elif row["action"] == "NO BET":
+        # Sau ván skip thì không tính là vừa win nữa để mở khóa vào lệnh ván kế
+        last_bet_won = False
 
-# KIỂM TRA MỤC TIÊU PHIÊN
 is_session_achieved = session_pnl >= target_profit
 
-# BẢNG TIẾN ĐỘ VỐN
 kpi1, kpi2, kpi3 = st.columns(3)
 kpi1.metric("Số dư hiện tại", f"{current_acc_balance:,}$", delta=f"{'+' if session_pnl>=0 else ''}{session_pnl}$")
 kpi2.metric("Mục tiêu phiên (+5%)", f"+{target_profit}$", f"Đích: {target_balance:,}$")
@@ -257,19 +264,24 @@ kpi3.metric("Số tay bài đã nhập", len(df_cur), f"P: {history_hands.count(
 
 st.markdown("---")
 
-# CHẠY MÔ PHỎNG 8 BOT VÀ LẤY TÍN HIỆU
 bot_stats, next_preds = simulate_bots(history_hands)
-signal_side, signal_units, signal_desc = get_system_signal(bot_stats, next_preds, user_cycle_pnl, user_current_stake)
+signal_side, signal_units, signal_desc = get_system_signal(history_hands, bot_stats, next_preds, user_cycle_pnl, user_current_stake, last_bet_won)
 signal_money = signal_units * unit_val
 
-# KHU VỰC THÔNG BÁO TÍN HIỆU
+# Khống chế tiền cược sát mốc Target phiên
+if not is_session_achieved and signal_side in ["PLAYER", "BANKER"]:
+    remaining_profit = target_profit - session_pnl
+    if remaining_profit > 0 and signal_money > remaining_profit:
+        signal_money = remaining_profit
+        signal_units = max(1, remaining_profit // unit_val)
+
 if is_session_achieved:
     st.success(f"🏆 **ĐÃ HOÀN THÀNH MỤC TIÊU PHIÊN!** Lợi nhuận: **+{session_pnl}$**")
     st.markdown("""
     <div style='background-color: #D1E7DD; padding: 20px; border-radius: 12px; border: 2px solid #0F5132; text-align: center;'>
         <h2 style='margin:0; color: #0F5132;'>🔒 PHIÊN NÀY ĐÃ ĐƯỢC KHÓA LÃI</h2>
         <p style='margin: 8px 0 0 0; font-size: 16px; color: #155724;'>
-            Bạn đã đạt đúng kỷ luật chốt lời 5% lãi kép. Hãy dừng phiên, đóng bàn và nghỉ ngơi để bảo toàn lợi nhuận!
+            Mục tiêu 5% đã đạt. Đóng bàn và dừng phiên ngay lập tức để bảo toàn 100% lợi nhuận!
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -298,7 +310,6 @@ else:
 
 st.write("")
 
-# FORM NHẬP KẾT QUẢ THỰC TẾ
 if not is_session_achieved:
     st.markdown("##### 📥 Nhập kết quả mở thưởng bài:")
     btn_p, btn_b, btn_t = st.columns(3)
@@ -307,7 +318,6 @@ if not is_session_achieved:
         all_recs = load_all_history()
         stt = len(df_cur) + 1
         
-        # Nếu là kết quả Tie -> Hòa tiền, không thay đổi PnL
         if result_hand == "T":
             pnl_money = 0
             res_str = "TIE (HÒA)"
@@ -318,7 +328,7 @@ if not is_session_achieved:
                 res_str = "WIN" if win else "LOSE"
             else:
                 pnl_money = 0
-                res_str = "SKIP"
+                res_str = "MỒI / SKIP"
                 
         new_row = {
             "session_date": str(selected_date),
@@ -346,7 +356,6 @@ if not is_session_achieved:
         if st.button("🟢 TIE (HÒA)", use_container_width=True):
             process_hand("T")
 
-# HIỂN THỊ PHONG ĐỘ 8 BOT
 with st.expander("📊 Bảng theo dõi trạng thái 8 Bot Ảo (Thời gian thực)", expanded=True):
     bot_display = []
     for b in BOT_SPECS:
@@ -365,7 +374,6 @@ with st.expander("📊 Bảng theo dõi trạng thái 8 Bot Ảo (Thời gian th
         })
     st.dataframe(pd.DataFrame(bot_display), use_container_width=True, hide_index=True)
 
-# ĐIỀU KHIỂN & XUẤT EXCEL
 st.markdown("---")
 b_c1, b_c2, b_c3 = st.columns([1, 1, 2])
 with b_c1:
@@ -397,11 +405,10 @@ with b_c3:
             use_container_width=True
         )
 
-# BẢNG CHI TIẾT TỪNG VÁN
 st.markdown(f"#### 📋 Nhật ký chi tiết phiên ({selected_session})")
 if not df_cur.empty:
     view_df = df_cur[["stt", "actual_result", "action", "stake_money", "result", "money_pnl", "balance_after"]].copy()
     view_df.columns = ["Ván", "Kết Quả Ra", "Lệnh Cược", "Tiền Cược ($)", "W/L", "Lãi/Lỗ ($)", "Số Dư Sau Ván ($)"]
     st.dataframe(view_df, use_container_width=True, hide_index=True)
 else:
-    st.info("Chưa có ván nào trong phiên này. Nhập kết quả ván bài đầu tiên để bắt đầu!")
+    st.info("Chưa có ván nào trong phiên này. Hãy nhập 2 ván mồi đầu tiên để bắt đầu!")
