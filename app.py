@@ -4,32 +4,19 @@ from datetime import datetime, timezone, timedelta
 import json
 import os
 import io
-import random
 
 st.set_page_config(
-    page_title="Hệ Thống Dự Đoán 4 Phiên - 5 Bàn (GMT+7)",
-    layout="centered",
-    initial_sidebar_state="collapsed"
+    page_title="Baccarat 8-Bot Oscar's Grind Algorithm",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-DB_FILE = "history_data.json"
-CONFIG_FILE = "config_capital.json"
-PATTERN_FILE = "table_patterns.json"
+DB_FILE = "baccarat_history.json"
+CONFIG_FILE = "baccarat_config.json"
 
-# Lấy ngày hiện tại chuẩn múi giờ Việt Nam GMT+7
 VN_TZ = timezone(timedelta(hours=7))
 def get_current_vn_date():
     return datetime.now(VN_TZ).date()
-
-# 6 Tổ hợp xác suất hoán vị mốc (Tên bàn, tên trường kết quả)
-PERMUTATIONS = [
-    [("Bàn NHỎ / TO", "player3"), ("Bàn LẺ / CHẴN", "player4"), ("Bàn ĐEN / ĐỎ", "player2")],
-    [("Bàn NHỎ / TO", "player3"), ("Bàn ĐEN / ĐỎ", "player2"), ("Bàn LẺ / CHẴN", "player4")],
-    [("Bàn LẺ / CHẴN", "player4"), ("Bàn NHỎ / TO", "player3"), ("Bàn ĐEN / ĐỎ", "player2")],
-    [("Bàn LẺ / CHẴN", "player4"), ("Bàn ĐEN / ĐỎ", "player2"), ("Bàn NHỎ / TO", "player3")],
-    [("Bàn ĐEN / ĐỎ", "player2"), ("Bàn NHỎ / TO", "player3"), ("Bàn LẺ / CHẴN", "player4")],
-    [("Bàn ĐEN / ĐỎ", "player2"), ("Bàn LẺ / CHẴN", "player4"), ("Bàn NHỎ / TO", "player3")],
-]
 
 # --- 1. LƯU TRỮ VÀ ĐỌC DỮ LIỆU ---
 def load_all_history():
@@ -45,575 +32,376 @@ def save_all_history(data_list):
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data_list, f, ensure_ascii=False, indent=2)
 
-def load_capital_config():
-    default_config = {
-        "base_capital": 4000,
-        "session_start_cap": 4000
+def load_config():
+    default_cfg = {
+        "account_balance": 1780,
+        "risk_bankroll": 700,
+        "target_percent": 5.0,
+        "unit_size": 1
     }
     if not os.path.exists(CONFIG_FILE):
-        return default_config
+        return default_cfg
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
-        return default_config
+        return default_cfg
 
-def save_capital_config(config_dict):
+def save_config(cfg_dict):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config_dict, f, ensure_ascii=False, indent=2)
+        json.dump(cfg_dict, f, ensure_ascii=False, indent=2)
 
-def load_patterns():
-    if not os.path.exists(PATTERN_FILE):
-        return {}
-    try:
-        with open(PATTERN_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+# --- 2. LOGIC TÍNH TOÁN 8 BOT ẢO (4 CẶP ĐỘ TRỄ) ---
+BOT_SPECS = [
+    {"name": "Tom", "lag": 1, "opp": False},
+    {"name": "Pablo", "lag": 1, "opp": True},
+    {"name": "Mel", "lag": 2, "opp": False},
+    {"name": "Hamza", "lag": 2, "opp": True},
+    {"name": "Kevin", "lag": 3, "opp": False},
+    {"name": "Gukesh", "lag": 3, "opp": True},
+    {"name": "Olivia", "lag": 4, "opp": False},
+    {"name": "Zion", "lag": 4, "opp": True},
+]
 
-def save_patterns(patterns_dict):
-    with open(PATTERN_FILE, "w", encoding="utf-8") as f:
-        json.dump(patterns_dict, f, ensure_ascii=False, indent=2)
+def simulate_bots(history_hands):
+    """
+    history_hands: list of results ('P', 'B')
+    Trả về:
+    - bot_states: dict chứa thông tin từng bot (chuỗi loss hiện tại, chu kỳ PnL, mức cược Oscar Grind tiếp theo)
+    - next_preds: dict chứa dự đoán ván tiếp theo của từng bot ('P', 'B' hoặc None)
+    """
+    bot_stats = {
+        b["name"]: {
+            "loss_streak": 0,
+            "win_streak": 0,
+            "cycle_pnl": 0,
+            "total_pnl": 0,
+            "og_stake": 1,
+            "last_pred": None
+        } for b in BOT_SPECS
+    }
 
-# Bảng tra cứu thuộc tính chuẩn Roulette 37 số (0 - 36)
-ROULETTE_DATA = {
-    0: {"p1": "0", "p2": "0", "p3": "0", "p4": "0"},
-    1: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "LẺ"},
-    2: {"p1": "I", "p2": "ĐEN", "p3": "NHỎ", "p4": "CHẴN"},
-    3: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "LẺ"},
-    4: {"p1": "I", "p2": "ĐEN", "p3": "NHỎ", "p4": "CHẴN"},
-    5: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "LẺ"},
-    6: {"p1": "I", "p2": "ĐEN", "p3": "NHỎ", "p4": "CHẴN"},
-    7: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "LẺ"},
-    8: {"p1": "I", "p2": "ĐEN", "p3": "NHỎ", "p4": "CHẴN"},
-    9: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "LẺ"},
-    10: {"p1": "I", "p2": "ĐEN", "p3": "NHỎ", "p4": "CHẴN"},
-    11: {"p1": "I", "p2": "ĐEN", "p3": "NHỎ", "p4": "LẺ"},
-    12: {"p1": "I", "p2": "ĐỎ", "p3": "NHỎ", "p4": "CHẴN"},
-    13: {"p1": "II", "p2": "ĐEN", "p3": "NHỎ", "p4": "LẺ"},
-    14: {"p1": "II", "p2": "ĐỎ", "p3": "NHỎ", "p4": "CHẴN"},
-    15: {"p1": "II", "p2": "ĐEN", "p3": "NHỎ", "p4": "LẺ"},
-    16: {"p1": "II", "p2": "ĐỎ", "p3": "NHỎ", "p4": "CHẴN"},
-    17: {"p1": "II", "p2": "ĐEN", "p3": "NHỎ", "p4": "LẺ"},
-    18: {"p1": "II", "p2": "ĐỎ", "p3": "NHỎ", "p4": "CHẴN"},
-    19: {"p1": "II", "p2": "ĐỎ", "p3": "TO", "p4": "LẺ"},
-    20: {"p1": "II", "p2": "ĐEN", "p3": "TO", "p4": "CHẴN"},
-    21: {"p1": "II", "p2": "ĐỎ", "p3": "TO", "p4": "LẺ"},
-    22: {"p1": "II", "p2": "ĐEN", "p3": "TO", "p4": "CHẴN"},
-    23: {"p1": "II", "p2": "ĐỎ", "p3": "TO", "p4": "LẺ"},
-    24: {"p1": "II", "p2": "ĐEN", "p3": "TO", "p4": "CHẴN"},
-    25: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "LẺ"},
-    26: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "CHẴN"},
-    27: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "LẺ"},
-    28: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "CHẴN"},
-    29: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "LẺ"},
-    30: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "CHẴN"},
-    31: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "LẺ"},
-    32: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "CHẴN"},
-    33: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "LẺ"},
-    34: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "CHẴN"},
-    35: {"p1": "III", "p2": "ĐEN", "p3": "TO", "p4": "LẺ"},
-    36: {"p1": "III", "p2": "ĐỎ", "p3": "TO", "p4": "CHẴN"},
-}
-
-# --- 2. LOGIC LẤY PHÂN KHÚC SAU LẦN RA SỐ 0 GẦN NHẤT ---
-def get_effective_table_df(df_cur):
-    """Lấy danh sách các ván sau lần xuất hiện số 0 gần nhất"""
-    if df_cur.empty:
-        return pd.DataFrame(), 0
-    zero_indices = df_cur[df_cur["kq_so"] == 0].index.tolist()
-    if not zero_indices:
-        return df_cur.copy(), 0
-    last_zero_idx = zero_indices[-1]
-    df_effective = df_cur.loc[last_zero_idx + 1:].copy()
-    return df_effective, len(zero_indices)
-
-# --- 3. LOGIC DỰ ĐOÁN (CHU KỲ NGƯỢC 3 VÁN TRÊN KHÚC HIỆU LỰC) ---
-def get_prediction_info(df_effective, pattern_idx):
-    stt_eff = len(df_effective) + 1
-    if stt_eff <= 3:
-        return "-", "-"
-    
-    base_end_idx = ((stt_eff - 1) // 3) * 3
-    if len(df_effective) < base_end_idx:
-        return "Chờ đủ dữ liệu", "-"
-    
-    step_in_block = (stt_eff - 1) % 3
-    pattern = PERMUTATIONS[pattern_idx]
-    
-    # Dự đoán đánh ngược mốc (Mốc 3 -> Mốc 2 -> Mốc 1)
-    if step_in_block == 0:
-        bet_type, col_name = pattern[2]
-        target_row = df_effective.iloc[base_end_idx - 1]
-        pred = target_row[col_name]
-    elif step_in_block == 1:
-        bet_type, col_name = pattern[1]
-        target_row = df_effective.iloc[base_end_idx - 2]
-        pred = target_row[col_name]
-    else:
-        bet_type, col_name = pattern[0]
-        target_row = df_effective.iloc[base_end_idx - 3]
-        pred = target_row[col_name]
-        
-    return bet_type, pred
-
-# --- 4. LOGIC TÍNH TIỀN CƯỢC ---
-def get_next_stake(df_table, df_effective, base_capital):
-    unit_5pct = int(base_capital * 0.05)
-    unit_10pct = unit_5pct * 2
-    
-    if len(df_effective) < 3:
-        return 0, "Mốc"
-    if len(df_effective) == 3:
-        return unit_5pct, "Lệnh 1 (5%)"
-    
-    table_pnl = df_table["money_pnl"].sum()
-    last_row = df_table.iloc[-1]
-    last_wl = last_row["win_lose"]
-    last_stake = last_row["stake_amount"]
-    
-    if table_pnl >= 0:
-        return unit_5pct, "Đủ vốn (5%)"
-    
-    if last_wl == "WIN":
-        if last_stake == unit_5pct:
-            return unit_10pct, "Săn 2 WIN (Gấp đôi 10%)"
+    # Chạy mô phỏng từng ván từ đầu khay bài đến hiện tại
+    for i, actual in enumerate(history_hands):
+        past = history_hands[:i]
+        for b in BOT_SPECS:
+            name = b["name"]
+            lag = b["lag"]
+            opp = b["opp"]
+            
+            # Tính dự đoán của bot cho ván i
+            pred = None
+            if len(past) >= lag:
+                ref = past[-lag]
+                pred = ('P' if ref == 'B' else 'B') if opp else ref
+            
+            # Cập nhật kết quả sau ván i
+            if pred is not None:
+                win = (actual == pred)
+                stk = bot_stats[name]["og_stake"]
+                if win:
+                    bot_stats[name]["win_streak"] += 1
+                    bot_stats[name]["loss_streak"] = 0
+                    bot_stats[name]["cycle_pnl"] += stk
+                    bot_stats[name]["total_pnl"] += stk
+                    if bot_stats[name]["cycle_pnl"] >= 1:
+                        bot_stats[name]["cycle_pnl"] = 0
+                        bot_stats[name]["og_stake"] = 1
+                    else:
+                        needed = 1 - bot_stats[name]["cycle_pnl"]
+                        bot_stats[name]["og_stake"] = min(stk + 1, needed)
+                else:
+                    bot_stats[name]["loss_streak"] += 1
+                    bot_stats[name]["win_streak"] = 0
+                    bot_stats[name]["cycle_pnl"] -= stk
+                    bot_stats[name]["total_pnl"] -= stk
+                    # Thua: giữ nguyên mức cược theo Oscar's Grind
+                    
+    # Dự đoán ván kế tiếp
+    next_preds = {}
+    for b in BOT_SPECS:
+        name = b["name"]
+        lag = b["lag"]
+        opp = b["opp"]
+        if len(history_hands) >= lag:
+            ref = history_hands[-lag]
+            next_preds[name] = ('P' if ref == 'B' else 'B') if opp else ref
         else:
-            return unit_5pct, "Chốt chuỗi (Về 5%)"
+            next_preds[name] = None
+
+    return bot_stats, next_preds
+
+# --- 3. THUẬT TOÁN QUYẾT ĐỊNH ĐIỂM VÀO LỆNH & TIỀN CƯỢC ---
+def get_system_signal(bot_stats, next_preds, user_cycle_pnl, user_current_stake):
+    """
+    Quyết định cửa đánh (Player / Banker / No Bet) và số tiền cược theo Oscar's Grind
+    """
+    # Nếu chưa đủ dữ liệu tối thiểu 2 ván
+    valid_preds = [p for p in next_preds.values() if p is not None]
+    if len(valid_preds) < 4:
+        return "NO BET", 0, "Chờ đủ dữ liệu ván mồi"
+
+    # 1. Tính trọng số áp lực chuỗi thua của từng phe
+    p_bots = [name for name, p in next_preds.items() if p == "P"]
+    b_bots = [name for name, p in next_preds.items() if p == "B"]
+
+    max_p_loss = max([bot_stats[b]["loss_streak"] for b in p_bots]) if p_bots else 0
+    max_b_loss = max([bot_stats[b]["loss_streak"] for b in b_bots]) if b_bots else 0
+    
+    # 2. Cơ chế bắt đáy chuỗi thua (Fade the Loser)
+    chosen_side = None
+    reason = ""
+
+    if max_p_loss >= 2 and max_p_loss > max_b_loss:
+        chosen_side = "PLAYER"
+        reason = f"Bắt đáy phe Player (Có bot thua thông {max_p_loss} ván)"
+    elif max_b_loss >= 2 and max_b_loss > max_p_loss:
+        chosen_side = "BANKER"
+        reason = f"Bắt đáy phe Banker (Có bot thua thông {max_b_loss} ván)"
+    elif max_p_loss == max_b_loss and max_p_loss >= 2:
+        # Nếu cả 2 bên đều có bot thua thông cân bằng -> Vùng tranh chấp -> Skip
+        return "NO BET", 0, "Tranh chấp cân bằng (Skip)"
     else:
-        return unit_5pct, "Giữ nhịp (5%)"
+        # Không có bot nào rơi vào chuỗi thua sâu đủ điều kiện lọc
+        return "NO BET", 0, "Chờ nhịp lệch chuẩn (Skip)"
 
-# --- 5. GIAO DIỆN CHÍNH ---
-st.markdown("<h3 style='text-align: center; color: #1F4E78;'>🎯 QUẢN LÝ VỐN 4 PHIÊN - 5 BÀN (GMT+7)</h3>", unsafe_allow_html=True)
+    # 3. Tính tiền cược theo Oscar's Grind của tài khoản thật
+    stake = user_current_stake
+    if user_cycle_pnl >= 0:
+        stake = 1
+    else:
+        needed = 1 - user_cycle_pnl
+        stake = min(user_current_stake, needed)
 
-cap_cfg = load_capital_config()
+    return chosen_side, stake, reason
+
+# --- 4. GIAO DIỆN CHÍNH (STREAMLIT UI) ---
+st.markdown("<h2 style='text-align: center; color: #1F4E78;'>🎯 HỆ THỐNG BACCARAT 8-BOT OSCAR'S GRIND</h2>", unsafe_allow_html=True)
+st.caption("<div style='text-align: center;'>Thuật toán bóc tách từ Mister Rafael | Quản lý vốn Lãi Kép 5%</div>", unsafe_allow_html=True)
+
+cfg = load_config()
 today_vn = get_current_vn_date()
 
-# KHU VỰC CHỌN NGÀY, PHIÊN, BÀN
-c_date, c_sess, c_tbl = st.columns([1.1, 1.2, 1.1])
+# SIDEBAR: CÀI ĐẶT VỐN & LÃI KÉP
+with st.sidebar:
+    st.markdown("### 💼 Quản Lý Vốn Lãi Kép")
+    acc_bal = st.number_input("Tổng số dư tài khoản ($):", min_value=10, value=int(cfg["account_balance"]), step=50)
+    risk_bal = st.number_input("Vốn chịu rủi ro phiên ($):", min_value=10, value=int(cfg["risk_bankroll"]), step=50)
+    target_pct = st.number_input("Mục tiêu lãi kép (%):", min_value=1.0, max_value=20.0, value=float(cfg["target_percent"]), step=0.5)
+    unit_val = st.number_input("Giá trị 1 Unit ($):", min_value=1, value=int(cfg["unit_size"]), step=1)
+    
+    target_profit = int(risk_bal * (target_pct / 100.0))
+    target_balance = acc_bal + target_profit
+    
+    if (acc_bal != cfg["account_balance"] or risk_bal != cfg["risk_bankroll"] or 
+        target_pct != cfg["target_percent"] or unit_val != cfg["unit_size"]):
+        save_config({
+            "account_balance": acc_bal,
+            "risk_bankroll": risk_bal,
+            "target_percent": target_pct,
+            "unit_size": unit_val
+        })
+    
+    st.markdown("---")
+    st.markdown(f"**Mục tiêu lợi nhuận:** `+{target_profit}$` ({target_pct}%)")
+    st.markdown(f"**Số dư đích đến:** `{target_balance:,}$`")
+
+# BỘ CHỌN NGÀY & PHIÊN
+c_date, c_sess = st.columns(2)
 with c_date:
     selected_date = st.date_input("Ngày (GMT+7):", today_vn)
 with c_sess:
-    selected_session = st.selectbox("Phiên:", ["Phien 1 (Sang)", "Phien 2 (Trua)", "Phien 3 (Chieu)", "Phien 4 (Toi)"])
+    selected_session = st.selectbox("Phiên chơi:", ["Phien 1", "Phien 2", "Phien 3", "Phien 4"])
 
 all_records = load_all_history()
 if all_records:
     df_all = pd.DataFrame(all_records)
-    df_sess = df_all[(df_all["session_date"] == str(selected_date)) & (df_all["session_name"] == selected_session)].copy()
+    df_cur = df_all[(df_all["session_date"] == str(selected_date)) & (df_all["session_name"] == selected_session)].copy()
 else:
     df_all = pd.DataFrame()
-    df_sess = pd.DataFrame()
-
-table_names = [f"Bàn {i}" for i in range(1, 6)]
-table_options = []
-
-base_cap_default = int(cap_cfg.get("base_capital", 4000))
-target_threshold_table = base_cap_default * 0.0475
-stop_loss_threshold_table = -base_cap_default * 0.15  # Cắt lỗ -15%
-
-for t_name in table_names:
-    if not df_sess.empty and "table_name" in df_sess.columns:
-        df_t = df_sess[df_sess["table_name"] == t_name]
-    else:
-        df_t = pd.DataFrame()
-    
-    t_pnl = df_t["money_pnl"].sum() if not df_t.empty else 0
-    t_round1_won = False
-    if len(df_t) >= 4:
-        v4 = df_t[df_t["stt"] == 4]
-        if not v4.empty and v4["win_lose"].values[0] == "WIN":
-            t_round1_won = True
-    
-    if t_pnl >= target_threshold_table or t_round1_won:
-        table_options.append(f"{t_name} 🔒 (Xong 5%)")
-    elif t_pnl <= stop_loss_threshold_table:
-        table_options.append(f"{t_name} 🔒 (Cắt lỗ -15%)")
-    else:
-        table_options.append(t_name)
-
-with c_tbl:
-    selected_table_display = st.selectbox("Chọn Bàn Chơi:", table_options)
-    selected_table = selected_table_display.split(" ")[0] + " " + selected_table_display.split(" ")[1]
-
-if not df_sess.empty and "table_name" in df_sess.columns:
-    df_cur = df_sess[df_sess["table_name"] == selected_table].copy()
-else:
     df_cur = pd.DataFrame()
 
-next_stt = len(df_cur) + 1
-df_effective, zero_count = get_effective_table_df(df_cur)
-eff_stt = len(df_effective) + 1
+# Lấy danh sách kết quả bài đã ra trong phiên (chỉ lấy P và B, bỏ qua Tie)
+history_hands = []
+if not df_cur.empty:
+    history_hands = [h for h in df_cur["actual_result"].tolist() if h in ["P", "B"]]
 
-# BẢNG 3 Ô VỐN QUẢN LÝ
-st.markdown("##### 💼 BẢNG QUẢN LÝ VỐN")
-c_v1, c_v2, c_v3 = st.columns(3)
+# Lũy kế lợi nhuận phiên
+session_pnl = int(df_cur["money_pnl"].sum()) if not df_cur.empty else 0
+current_acc_balance = acc_bal + session_pnl
 
-with c_v1:
-    base_capital = st.number_input(
-        "1. Vốn Cơ Sở (Ban đầu):",
-        min_value=100,
-        value=base_cap_default,
-        step=500,
-        help="Vốn chuẩn tính 5% cược và target"
-    )
+# Trạng thái Oscar's Grind của người dùng
+user_cycle_pnl = 0
+user_current_stake = 1
+for _, row in df_cur.iterrows():
+    if row["action"] in ["PLAYER", "BANKER"]:
+        pnl = row["money_pnl"]
+        user_cycle_pnl += pnl
+        if pnl > 0:  # Thắng
+            if user_cycle_pnl >= 1:
+                user_cycle_pnl = 0
+                user_current_stake = 1
+            else:
+                user_current_stake = min(user_current_stake + 1, 1 - user_cycle_pnl)
+        else:  # Thua
+            pass  # Giữ nguyên cược
 
-with c_v2:
-    start_session_cap = st.number_input(
-        "2. Vốn Trước Khi Vào Phiên:",
-        min_value=0,
-        value=int(cap_cfg.get("session_start_cap", base_capital)),
-        step=500,
-        help="Số dư vốn thực tế của bạn trước phiên"
-    )
+# KIỂM TRA MỤC TIÊU PHIÊN
+is_session_achieved = session_pnl >= target_profit
 
-if base_capital != cap_cfg.get("base_capital") or start_session_cap != cap_cfg.get("session_start_cap"):
-    save_capital_config({"base_capital": base_capital, "session_start_cap": start_session_cap})
-
-session_total_pnl = int(df_sess["money_pnl"].sum()) if not df_sess.empty else 0
-table_pnl = int(df_cur["money_pnl"].sum()) if not df_cur.empty else 0
-current_real_cap = start_session_cap + session_total_pnl
-
-with c_v3:
-    st.metric(
-        "3. Vốn Thực Tế Hiện Tại:",
-        f"{current_real_cap:,}",
-        delta=f"{'+' if session_total_pnl >= 0 else ''}{session_total_pnl:,} (Cả phiên)"
-    )
-
-# --- 6. QUẢN LÝ CẤU TRÚC RANDOM CỦA TỪNG BÀN ---
-patterns_all = load_patterns()
-table_key = f"{selected_date}_{selected_session}_{selected_table}"
-current_pattern_idx = patterns_all.get(table_key, 0)
+# BẢNG TIẾN ĐỘ VỐN
+kpi1, kpi2, kpi3 = st.columns(3)
+kpi1.metric("Số dư hiện tại", f"{current_acc_balance:,}$", delta=f"{'+' if session_pnl>=0 else ''}{session_pnl}$")
+kpi2.metric("Mục tiêu phiên (+5%)", f"+{target_profit}$", f"Đích: {target_balance:,}$")
+kpi3.metric("Số tay bài đã nhập", len(df_cur), f"P: {history_hands.count('P')} | B: {history_hands.count('B')}")
 
 st.markdown("---")
-col_pat1, col_pat2 = st.columns([2.2, 1])
 
-with col_pat2:
-    if st.button("🎲 RANDOM CẤU TRÚC", use_container_width=True, help="Bốc ngẫu nhiên cấu trúc"):
-        new_idx = random.randint(0, 5)
-        patterns_all[table_key] = new_idx
-        save_patterns(patterns_all)
-        st.rerun()
+# CHẠY MÔ PHỎNG 8 BOT VÀ LẤY TÍN HIỆU
+bot_stats, next_preds = simulate_bots(history_hands)
+signal_side, signal_units, signal_desc = get_system_signal(bot_stats, next_preds, user_cycle_pnl, user_current_stake)
+signal_money = signal_units * unit_val
 
-pat_data = PERMUTATIONS[current_pattern_idx]
-m1_name = pat_data[0][0].replace("Bàn ", "")
-m2_name = pat_data[1][0].replace("Bàn ", "")
-m3_name = pat_data[2][0].replace("Bàn ", "")
-
-with col_pat1:
-    st.markdown(f"""
-    <div style='background-color: #F2F4F7; padding: 8px 12px; border-radius: 8px; border: 1px solid #D0D5DD;'>
-        <span style='font-size: 13px; color: #475467;'><b>Cấu trúc {selected_table}:</b></span><br>
-        <b style='color: #1F4E78;'>Mốc:</b> {m1_name} ➔ {m2_name} ➔ {m3_name} <br>
-        <b style='color: #C00000;'>Đánh:</b> {m3_name} ➔ {m2_name} ➔ {m1_name}
-    </div>
-    """, unsafe_allow_html=True)
-
-# KIỂM TRA ĐIỀU KIỆN KHÓA BÀN (TARGET 5% HOẶC CẮT LỖ -15%)
-unit_base_5pct = int(base_capital * 0.05)
-target_threshold = base_capital * 0.0475
-stop_threshold = -base_capital * 0.15
-
-is_table_target_hit = table_pnl >= target_threshold
-is_round1_won = False
-if len(df_cur) >= 4:
-    v4 = df_cur[df_cur["stt"] == 4]
-    if not v4.empty and v4["win_lose"].values[0] == "WIN":
-        is_round1_won = True
-
-is_table_stop_hit = table_pnl <= stop_threshold
-
-# TIẾN ĐỘ 5 BÀN CỦA PHIÊN
-st.write("")
-st.markdown(f"**Tiến độ 5 Bàn của {selected_session}:**")
-p_cols = st.columns(5)
-for idx, t_opt in enumerate(table_options):
-    if "Xong 5%" in t_opt:
-        p_cols[idx].success(f"{table_names[idx]}: ✅ XONG")
-    elif "Cắt lỗ" in t_opt:
-        p_cols[idx].error(f"{table_names[idx]}: 🛑 LỖ -15%")
-    else:
-        p_cols[idx].info(f"{table_names[idx]}: ⏳ ĐANG ĐÁNH")
-
-c_kpi1, c_kpi2 = st.columns(2)
-c_kpi1.metric("Mức cược chuẩn (5% vốn CS)", f"{unit_base_5pct:,}")
-c_kpi2.metric("Lợi nhuận bàn này", f"{'+' if table_pnl >= 0 else ''}{table_pnl:,}", f"Target: +{unit_base_5pct:,} | Cut: {stop_threshold:,}")
-
-# NẾU BÀN ĐẠT TARGET +5% -> KHÓA BÀN
-if is_table_target_hit or is_round1_won:
-    st.success(f"🎉 **{selected_table.upper()} ĐÃ HOÀN THÀNH TARGET 5% (+{table_pnl:,})!**")
-    st.markdown(f"""
-    <div style='background-color: #E2EFDA; padding: 20px; border-radius: 12px; border: 2px solid #375623; text-align: center;'>
-        <h2 style='margin:0; color: #276A3C;'>🔒 {selected_table.upper()} ĐÃ ĐƯỢC TỰ ĐỘNG KHÓA</h2>
-        <p style='margin: 8px 0 0 0; font-size: 16px; color: #333;'>
-            Mục tiêu 5% đã đạt. Hệ thống khóa hoàn toàn để bảo toàn lợi nhuận.<br>
-            👉 <b>Hãy chọn Bàn tiếp theo</b> chưa hoàn thành trong phiên này.
+# KHU VỰC THÔNG BÁO TÍN HIỆU
+if is_session_achieved:
+    st.success(f"🏆 **ĐÃ HOÀN THÀNH MỤC TIÊU PHIÊN!** Lợi nhuận: **+{session_pnl}$**")
+    st.markdown("""
+    <div style='background-color: #D1E7DD; padding: 20px; border-radius: 12px; border: 2px solid #0F5132; text-align: center;'>
+        <h2 style='margin:0; color: #0F5132;'>🔒 PHIÊN NÀY ĐÃ ĐƯỢC KHÓA LÃI</h2>
+        <p style='margin: 8px 0 0 0; font-size: 16px; color: #155724;'>
+            Bạn đã đạt đúng kỷ luật chốt lời 5% lãi kép. Hãy dừng phiên, đóng bàn và nghỉ ngơi để bảo toàn lợi nhuận!
         </p>
     </div>
     """, unsafe_allow_html=True)
-
-# NẾU BÀN BỊ ÂM ĐẠT MỐC CẮT LỖ -15% -> TỰ ĐỘNG KHÓA VÀ AUTO ĐỔI CẤU TRÚC
-elif is_table_stop_hit:
-    st.error(f"🛑 **{selected_table.upper()} ĐÃ CHẠM NGƯỠNG CẮT LỖ -15% ({table_pnl:,})!**")
-    st.markdown(f"""
-    <div style='background-color: #FCE8E6; padding: 20px; border-radius: 12px; border: 2px solid #C5221F; text-align: center;'>
-        <h2 style='margin:0; color: #C5221F;'>🔒 {selected_table.upper()} ĐÃ TỰ ĐỘNG KHÓA CẮT LỖ</h2>
-        <p style='margin: 8px 0 0 0; font-size: 16px; color: #333;'>
-            Bàn đã chạm giới hạn an toàn -15%. Hệ thống tự động khóa để bảo toàn vốn và <b>đã tự động đổi sang cấu trúc mới</b>.<br>
-            👉 Hãy chuyển sang Bàn khác hoặc nghỉ ngơi để bảo toàn vốn phiên.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
 else:
-    # HIỂN THỊ TÍN HIỆU VÀ FORM NHẬP
-    pred_type, pred_target = get_prediction_info(df_effective, current_pattern_idx)
-    stake_amount, stake_note = get_next_stake(df_cur, df_effective, base_capital)
-
-    if eff_stt <= 3:
-        current_moc_name = pat_data[eff_stt - 1][0].replace("Bàn ", "")
-        extra_note = f" (Sau ván số 0)" if zero_count > 0 else ""
-        st.info(f"⏳ **{selected_table} - Ván mốc {eff_stt}/3 (Mốc {current_moc_name}){extra_note}:** Nhập kết quả lấy mốc tín hiệu")
-    else:
+    if signal_side == "NO BET":
         st.markdown(f"""
-        <div style='background-color: #FFF2CC; padding: 16px; border-radius: 12px; border: 2px solid #D6B656; text-align: center;'>
-            <h4 style='margin:0; color:#555;'>{selected_table.upper()} - VÁN TIẾP THEO (STT: {next_stt})</h4>
-            <h1 style='margin:8px 0; color:#C00000; font-size: 38px; letter-spacing: 1px;'>
-                👉 ĐÁNH: <b>{pred_target} - {stake_amount:,}</b>
+        <div style='background-color: #F8F9FA; padding: 15px; border-radius: 10px; border: 2px solid #6C757D; text-align: center;'>
+            <h3 style='margin:0; color: #6C757D;'>⏳ TÍN HIỆU: <b>NO BET (SKIP / ĐỨNG NGOÀI)</b></h3>
+            <p style='margin: 5px 0 0 0; font-size: 14px; color: #495057;'>{signal_desc}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        bg_col = "#D4EDDA" if signal_side == "PLAYER" else "#F8D7DA"
+        text_col = "#0D6EFD" if signal_side == "PLAYER" else "#DC3545"
+        border_col = "#0D6EFD" if signal_side == "PLAYER" else "#DC3545"
+        
+        st.markdown(f"""
+        <div style='background-color: {bg_col}; padding: 16px; border-radius: 12px; border: 2px solid {border_col}; text-align: center;'>
+            <h4 style='margin:0; color: #333;'>👉 TÍN HIỆU VÁN TIẾP THEO</h4>
+            <h1 style='margin: 6px 0; color: {text_col}; font-size: 42px;'>
+                ĐÁNH {signal_side} - {signal_money}$ ({signal_units}u)
             </h1>
-            <p style='margin:0; font-size: 15px; color:#1F4E78;'>
-                <b>{pred_type}</b> | Chế độ vốn: <i>{stake_note}</i>
-            </p>
+            <p style='margin:0; font-size: 14px; color: #333;'>{signal_desc} | Chu kỳ PnL: <b>{user_cycle_pnl}u</b></p>
         </div>
         """, unsafe_allow_html=True)
 
-    st.write("")
+st.write("")
 
-    def handle_round_submit(val_so):
-        attr = ROULETTE_DATA.get(val_so, {"p1": "0", "p2": "0", "p3": "0", "p4": "0"})
-        p1, p2, p3, p4 = attr["p1"], attr["p2"], attr["p3"], attr["p4"]
-        
+# FORM NHẬP KẾT QUẢ THỰC TẾ
+if not is_session_achieved:
+    st.markdown("##### 📥 Nhập kết quả mở thưởng bài:")
+    btn_p, btn_b, btn_t = st.columns(3)
+    
+    def process_hand(result_hand):
         all_recs = load_all_history()
+        stt = len(df_cur) + 1
         
-        # XỬ LÝ TRƯỜNG HỢP RA SỐ 0: TỰ ĐỘNG ĐỔI CẤU TRÚC VÀ RESET MỐC
-        if val_so == 0:
-            wl = "LOSE" if eff_stt > 3 else "MỐC"
-            pnl = -stake_amount if eff_stt > 3 else 0
-            new_balance = current_real_cap + pnl
-            
-            new_row = {
-                "session_date": str(selected_date),
-                "session_name": selected_session,
-                "table_name": selected_table,
-                "stt": next_stt,
-                "kq_so": 0,
-                "player1": "0",
-                "player2": "0",
-                "player3": "0",
-                "player4": "0",
-                "bet_type": pred_type if eff_stt > 3 else "-",
-                "prediction": pred_target if eff_stt > 3 else "-",
-                "actual_result": "0",
-                "win_lose": wl,
-                "stake_amount": stake_amount if eff_stt > 3 else 0,
-                "money_pnl": pnl,
-                "cur_balance": new_balance,
-                "status": "RA SỐ 0 (RESET MỐC & AUTO ĐỔI CẤU TRÚC)"
-            }
-            all_recs.append(new_row)
-            save_all_history(all_recs)
-            
-            # TỰ ĐỘNG ĐỔI CẤU TRÚC RANDOM MỚI
-            pats = load_patterns()
-            new_p_idx = random.choice([i for i in range(6) if i != current_pattern_idx])
-            pats[table_key] = new_p_idx
-            save_patterns(pats)
-            st.rerun()
-            return
-        
-        # NẾU ĐANG TRONG 3 VÁN MỐC
-        if eff_stt <= 3:
-            new_row = {
-                "session_date": str(selected_date),
-                "session_name": selected_session,
-                "table_name": selected_table,
-                "stt": next_stt,
-                "kq_so": val_so,
-                "player1": p1,
-                "player2": p2,
-                "player3": p3,
-                "player4": p4,
-                "bet_type": "-",
-                "prediction": "-",
-                "actual_result": "-",
-                "win_lose": "MỐC",
-                "stake_amount": 0,
-                "money_pnl": 0,
-                "cur_balance": current_real_cap,
-                "status": "Dữ liệu mốc"
-            }
+        # Nếu là kết quả Tie -> Hòa tiền, không thay đổi PnL
+        if result_hand == "T":
+            pnl_money = 0
+            res_str = "TIE (HÒA)"
         else:
-            if pred_type == "Bàn ĐEN / ĐỎ":
-                actual = p2
-            elif pred_type == "Bàn LẺ / CHẴN":
-                actual = p4
+            if signal_side in ["PLAYER", "BANKER"]:
+                win = (signal_side[0] == result_hand)
+                pnl_money = signal_money if win else -signal_money
+                res_str = "WIN" if win else "LOSE"
             else:
-                actual = p3
-
-            wl = "WIN" if actual == pred_target else "LOSE"
-            pnl = stake_amount if wl == "WIN" else -stake_amount
-            new_balance = current_real_cap + pnl
-            new_t_pnl = table_pnl + pnl
-            
-            if (next_stt == 4 and wl == "WIN") or (new_t_pnl >= target_threshold):
-                stat = "HOÀN THÀNH TARGET (KHÓA BÀN)"
-            elif new_t_pnl <= stop_threshold:
-                stat = "CHẠM CẮT LỖ -15% (KHÓA BÀN)"
-                # TỰ ĐỘNG ĐỔI CẤU TRÚC CHO LẦN SAU
-                pats = load_patterns()
-                new_p_idx = random.choice([i for i in range(6) if i != current_pattern_idx])
-                pats[table_key] = new_p_idx
-                save_patterns(pats)
-            else:
-                stat = "TIẾP TỤC"
+                pnl_money = 0
+                res_str = "SKIP"
                 
-            new_row = {
-                "session_date": str(selected_date),
-                "session_name": selected_session,
-                "table_name": selected_table,
-                "stt": next_stt,
-                "kq_so": val_so,
-                "player1": p1,
-                "player2": p2,
-                "player3": p3,
-                "player4": p4,
-                "bet_type": pred_type,
-                "prediction": pred_target,
-                "actual_result": actual,
-                "win_lose": wl,
-                "stake_amount": stake_amount,
-                "money_pnl": pnl,
-                "cur_balance": new_balance,
-                "status": stat
-            }
-            
+        new_row = {
+            "session_date": str(selected_date),
+            "session_name": selected_session,
+            "stt": stt,
+            "actual_result": result_hand,
+            "action": signal_side,
+            "stake_units": signal_units if signal_side != "NO BET" else 0,
+            "stake_money": signal_money if signal_side != "NO BET" else 0,
+            "result": res_str,
+            "money_pnl": pnl_money,
+            "balance_after": current_acc_balance + pnl_money
+        }
         all_recs.append(new_row)
         save_all_history(all_recs)
+        st.rerun()
 
-    # 1. FORM NHẬP KẾT QUẢ GÕ SỐ
-    with st.form("input_form", clear_on_submit=True):
-        kq_input = st.number_input(
-            "Nhập số mở thưởng (0 - 36):",
-            min_value=0,
-            max_value=36,
-            value=None,
-            step=1,
-            placeholder="Chạm vào để gõ số..."
-        )
-        submitted = st.form_submit_button("XÁC NHẬN KẾT QUẢ", use_container_width=True)
-        if submitted:
-            if kq_input is None:
-                st.warning("⚠️ Vui lòng gõ số kết quả trước khi bấm xác nhận!")
-            else:
-                handle_round_submit(int(kq_input))
-                st.rerun()
+    with btn_p:
+        if st.button("🔵 PLAYER (P)", use_container_width=True, type="primary"):
+            process_hand("P")
+    with btn_b:
+        if st.button("🔴 BANKER (B)", use_container_width=True, type="secondary"):
+            process_hand("B")
+    with btn_t:
+        if st.button("🟢 TIE (HÒA)", use_container_width=True):
+            process_hand("T")
 
-    # 2. BÀN PHÍM CHỌN NHANH 1 CHẠM
-    with st.expander("⚡ Hoặc bấm chọn nhanh số tại đây (1 Chạm)"):
-        if st.button("Số 0 (Xanh)", use_container_width=True, key="btn_0"):
-            handle_round_submit(0)
-            st.rerun()
-            
-        for row_start in range(1, 37, 6):
-            cols = st.columns(6)
-            for i in range(6):
-                val = row_start + i
-                if val <= 36:
-                    color_type = ROULETTE_DATA[val]["p2"]
-                    label = f"{val} ({color_type[0]})"
-                    if cols[i].button(label, key=f"quick_{val}", use_container_width=True):
-                        handle_round_submit(val)
-                        st.rerun()
+# HIỂN THỊ PHONG ĐỘ 8 BOT
+with st.expander("📊 Bảng theo dõi trạng thái 8 Bot Ảo (Thời gian thực)", expanded=True):
+    bot_display = []
+    for b in BOT_SPECS:
+        name = b["name"]
+        stt_info = bot_stats[name]
+        nxt_pred = next_preds[name]
+        pred_label = "PLAYER" if nxt_pred == "P" else ("BANKER" if nxt_pred == "B" else "-")
+        bot_display.append({
+            "Bot": name,
+            "Cặp Độ Trễ": f"Lag {b['lag']} ({'Nghịch' if b['opp'] else 'Thuận'})",
+            "Dự Đoán Tiếp": pred_label,
+            "Chuỗi Thua": f"{stt_info['loss_streak']} ván",
+            "Chuỗi Thắng": f"{stt_info['win_streak']} ván",
+            "Bậc Oscar's Grind": f"{stt_info['og_stake']}u",
+            "PnL Chu Kỳ": f"{stt_info['cycle_pnl']}u"
+        })
+    st.dataframe(pd.DataFrame(bot_display), use_container_width=True, hide_index=True)
 
-# NÚT ĐIỀU KHIỂN & QUẢN TRỊ DỮ LIỆU
-st.write("")
-btn_c1, btn_c2 = st.columns(2)
-with btn_c1:
-    if st.button(f"↩️ Xóa ván gần nhất ({selected_table})", use_container_width=True):
+# ĐIỀU KHIỂN & XUẤT EXCEL
+st.markdown("---")
+b_c1, b_c2, b_c3 = st.columns([1, 1, 2])
+with b_c1:
+    if st.button("↩️ Xóa ván gần nhất", use_container_width=True):
         all_recs = load_all_history()
         for idx in range(len(all_recs) - 1, -1, -1):
-            if (all_recs[idx]["session_date"] == str(selected_date) and 
-                all_recs[idx]["session_name"] == selected_session and 
-                all_recs[idx].get("table_name", "Bàn 1") == selected_table):
+            if all_recs[idx]["session_date"] == str(selected_date) and all_recs[idx]["session_name"] == selected_session:
                 all_recs.pop(idx)
                 save_all_history(all_recs)
                 st.rerun()
                 break
-
-with btn_c2:
-    if st.button(f"🗑️ Xóa trắng riêng {selected_table}", use_container_width=True):
+with b_c2:
+    if st.button("🗑️ Xóa sạch phiên này", use_container_width=True):
         all_recs = load_all_history()
-        all_recs = [
-            x for x in all_recs 
-            if not (x["session_date"] == str(selected_date) and 
-                    x["session_name"] == selected_session and 
-                    x.get("table_name", "Bàn 1") == selected_table)
-        ]
+        all_recs = [x for x in all_recs if not (x["session_date"] == str(selected_date) and x["session_name"] == selected_session)]
         save_all_history(all_recs)
         st.rerun()
-
-# KHU VỰC XUẤT DỮ LIỆU RA EXCEL
-st.markdown("---")
-st.markdown("##### 📊 XUẤT BÁO CÁO & THỐNG KÊ EXCEL")
-col_ex1, col_ex2 = st.columns(2)
-
-with col_ex1:
-    if not df_sess.empty:
-        output_cur = io.BytesIO()
-        clean_name = selected_session.replace(":", "").replace(" ", "_")[:30]
-        with pd.ExcelWriter(output_cur, engine='openpyxl') as writer:
-            df_sess.to_excel(writer, index=False, sheet_name=clean_name)
-        excel_cur = output_cur.getvalue()
+with b_c3:
+    if not df_cur.empty:
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_cur.to_excel(writer, index=False, sheet_name=selected_session)
+        excel_data = output.getvalue()
         st.download_button(
-            label="📥 Tải Excel Phiên Này (Cả 5 Bàn)",
-            data=excel_cur,
-            file_name=f"Phien_{clean_name}_{selected_date}.xlsx",
+            label="📥 Tải lịch sử phiên về Excel",
+            data=excel_data,
+            file_name=f"Baccarat_{selected_session}_{selected_date}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
 
-with col_ex2:
-    all_stored = load_all_history()
-    if all_stored:
-        df_all_full = pd.DataFrame(all_stored)
-        output_all = io.BytesIO()
-        with pd.ExcelWriter(output_all, engine='openpyxl') as writer:
-            df_all_full.to_excel(writer, index=False, sheet_name="Lich_Su_Toan_Bo")
-        excel_all = output_all.getvalue()
-        st.download_button(
-            label="📦 Tải Toàn Bộ Lịch Sử (Tất Cả Ngày)",
-            data=excel_all,
-            file_name=f"Lich_Su_Tong_Hop_{today_vn}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
-
-# BẢNG CHI TIẾT DIỄN BIẾN BÀN
-st.markdown(f"#### 📋 Diễn biến chi tiết ({selected_table})")
+# BẢNG CHI TIẾT TỪNG VÁN
+st.markdown(f"#### 📋 Nhật ký chi tiết phiên ({selected_session})")
 if not df_cur.empty:
-    show_df = df_cur[["stt", "kq_so", "prediction", "actual_result", "win_lose", "stake_amount", "money_pnl", "cur_balance", "status"]].copy()
-    show_df.columns = ["STT", "Số", "Dự Đoán", "Ra", "W/L", "Tiền Cược", "Lãi/Lỗ", "Vốn Hiện Tại", "Trạng Thái"]
-    st.dataframe(show_df, use_container_width=True)
+    view_df = df_cur[["stt", "actual_result", "action", "stake_money", "result", "money_pnl", "balance_after"]].copy()
+    view_df.columns = ["Ván", "Kết Quả Ra", "Lệnh Cược", "Tiền Cược ($)", "W/L", "Lãi/Lỗ ($)", "Số Dư Sau Ván ($)"]
+    st.dataframe(view_df, use_container_width=True, hide_index=True)
 else:
-    st.write(f"Chưa có ván nào trong {selected_table}. Bấm nút Random cấu trúc rồi nhập 3 ván đầu tiên để bắt đầu.")
-
-# NÚT RESET TOÀN BỘ HỆ THỐNG / NÂNG VỐN THÁNG MỚI
-with st.expander("⚙️ Quản trị: Reset toàn bộ hệ thống để nâng vốn mới"):
-    st.warning("⚠️ Thao tác này sẽ xóa toàn bộ lịch sử lưu trữ của tất cả các ngày.")
-    confirm_reset = st.checkbox("Tôi xác nhận muốn xóa sạch toàn bộ lịch sử để nâng vốn cơ sở mới")
-    if confirm_reset:
-        if st.button("🔴 TIẾN HÀNH RESET TOÀN BỘ HỆ THỐNG", use_container_width=True):
-            save_all_history([])
-            save_patterns({})
-            st.success("Đã xóa sạch dữ liệu lưu trữ! Bạn có thể bắt đầu lại.")
-            st.rerun()
+    st.info("Chưa có ván nào trong phiên này. Nhập kết quả ván bài đầu tiên để bắt đầu!")
