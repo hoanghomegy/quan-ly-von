@@ -3,7 +3,6 @@ import pandas as pd
 import datetime
 import io
 
-# Cấu hình giao diện Streamlit
 st.set_page_config(
     page_title="Baccarat Big Eye Road Strategy Engine",
     layout="wide",
@@ -11,17 +10,17 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# CSS TÙY CHỈNH THEO ĐÚNG YÊU CẦU MÀU SẮC & CHỮ TO RÕ NÉT
+# CSS GIAO DIỆN CẢNH BÁO: CHỮ TO IN ĐẬM RÕ NÉT THEO YÊU CẦU
 # ==============================================================================
 st.markdown("""
 <style>
     .alert-player {
         background-color: #0052cc;
         color: #ffffff;
-        padding: 24px;
-        border-radius: 12px;
+        padding: 26px;
+        border-radius: 14px;
         text-align: center;
-        font-size: 32px;
+        font-size: 34px;
         font-weight: 900;
         letter-spacing: 2px;
         box-shadow: 0 4px 15px rgba(0, 82, 204, 0.4);
@@ -30,10 +29,10 @@ st.markdown("""
     .alert-banker {
         background-color: #d32f2f;
         color: #ffffff;
-        padding: 24px;
-        border-radius: 12px;
+        padding: 26px;
+        border-radius: 14px;
         text-align: center;
-        font-size: 32px;
+        font-size: 34px;
         font-weight: 900;
         letter-spacing: 2px;
         box-shadow: 0 4px 15px rgba(211, 47, 47, 0.4);
@@ -42,22 +41,33 @@ st.markdown("""
     .alert-stop {
         background-color: #ffffff;
         color: #d32f2f;
-        border: 4px solid #d32f2f;
-        padding: 24px;
-        border-radius: 12px;
+        border: 5px solid #d32f2f;
+        padding: 26px;
+        border-radius: 14px;
         text-align: center;
-        font-size: 34px;
+        font-size: 36px;
         font-weight: 900;
         letter-spacing: 2px;
         animation: pulse 1.5s infinite;
         margin: 15px 0;
     }
+    .alert-skip-table {
+        background-color: #fff0f0;
+        color: #d32f2f;
+        border: 3px solid #ff4d4f;
+        padding: 22px;
+        border-radius: 14px;
+        text-align: center;
+        font-size: 28px;
+        font-weight: 900;
+        margin: 15px 0;
+    }
     .alert-wait {
         background-color: #f4f5f7;
-        color: #42526e;
+        color: #172b4d;
         border: 2px dashed #97a0af;
-        padding: 20px;
-        border-radius: 12px;
+        padding: 22px;
+        border-radius: 14px;
         text-align: center;
         font-size: 24px;
         font-weight: 700;
@@ -72,70 +82,78 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# HÀM LOGIC SUY LUẬN NGƯỢC BẢNG PHỤ 1 (BIG EYE BOY ROAD)
+# HÀM LOGIC SUY LUẬN BẢNG PHỤ 1 (BIG EYE ROAD)
 # ==============================================================================
-def get_big_road_matrix(history):
-    """Chuyển chuỗi ván bài Big Road thành danh sách độ dài các cột"""
-    if not history:
-        return []
-    columns = []
-    current_col = [history[0]]
-    for item in history[1:]:
-        if item == current_col[-1]:
-            current_col.append(item)
-        else:
-            columns.append(current_col)
-            current_col = [item]
-    columns.append(current_col)
-    return columns
-
-def predict_red_big_eye(history):
+def calculate_big_eye_beads(history):
     """
-    Suy luận xem ván tiếp theo nếu ra Banker hay Player thì Bảng Phụ 1 ra HẠT ĐỎ:
-    Quy tắc chuẩn quốc tế:
-    - Nếu đi tiếp trong cột hiện tại (xuống dưới): So sánh độ dài cột trước (k - 1) với cột trước nữa (k - 2).
-    - Nếu bẻ sang cột mới: So sánh độ dài 2 cột liền kề trước đó. Bằng nhau -> ĐỎ, Khác nhau -> XANH.
+    Tính danh sách các hạt ['RED', 'BLUE'] của Bảng Phụ 1 theo chuẩn Casino
+    Hạt đầu tiên bắt đầu vẽ khi:
+    - Cột 2 dòng 2 (k == 2 and r >= 2)
+    - HOẶC Cột 3 dòng 1 (k >= 3)
     """
     if len(history) < 2:
-        return "WAIT", "Chưa đủ ván mồi để tính Bảng Phụ 1 (Cần tối thiểu 2 ván ở bàn mới)"
-        
-    cols = get_big_road_matrix(history)
-    k = len(cols)
-    curr_len = len(cols[-1])
-    curr_side = cols[-1][0]
-    opp_side = 'P' if curr_side == 'B' else 'B'
+        return []
     
-    # 1. Kịch bản nếu ra cùng cửa (tiếp tục cột)
-    same_gives_red = False
-    if k >= 2:
-        prev_len = len(cols[k-2])
-        if curr_len < prev_len:
-            same_gives_red = True
-        elif curr_len == prev_len:
-            same_gives_red = False
+    cols = []
+    c_col = [history[0]]
+    beads = []
+    
+    for idx in range(1, len(history)):
+        item = history[idx]
+        if item == c_col[-1]:
+            c_col.append(item)
+            is_new_col = False
         else:
-            same_gives_red = (curr_len - prev_len == 1)
+            cols.append(c_col)
+            c_col = [item]
+            is_new_col = True
             
-    # 2. Kịch bản nếu bẻ cửa (mở cột mới)
-    diff_gives_red = False
-    if k >= 2:
-        prev_col_len = len(cols[-1])
-        ref_col_len = len(cols[-2])
-        if prev_col_len == ref_col_len:
-            diff_gives_red = True
-            
-    if same_gives_red and not diff_gives_red:
-        return curr_side, f"Đánh {curr_side} để Bảng Phụ 1 ra Hạt Đỏ"
-    elif diff_gives_red and not same_gives_red:
-        return opp_side, f"Đánh {opp_side} để Bảng Phụ 1 ra Hạt Đỏ"
-    elif same_gives_red and diff_gives_red:
-        return curr_side, f"Cả 2 đều Đỏ (Ưu tiên thế cầu: {curr_side})"
+        all_cols = cols + [c_col]
+        k = len(all_cols)
+        r = len(c_col)
+        
+        if (k == 2 and r >= 2) or (k >= 3):
+            if not is_new_col:
+                left_len = len(all_cols[k-2])
+                if r <= left_len:
+                    beads.append('RED')
+                elif r == left_len + 1:
+                    beads.append('RED')
+                else:
+                    beads.append('BLUE')
+            else:
+                if len(all_cols[k-2]) == len(all_cols[k-3]):
+                    beads.append('RED')
+                else:
+                    beads.append('BLUE')
+    return beads
+
+def predict_side_for_red(history):
+    """
+    Suy luận xem ván tiếp theo ra B hay P thì Bảng Phụ 1 ra HẠT ĐỎ
+    """
+    curr_beads_len = len(calculate_big_eye_beads(history))
+    
+    b_test = history + ['B']
+    p_test = history + ['P']
+    
+    beads_b = calculate_big_eye_beads(b_test)
+    beads_p = calculate_big_eye_beads(p_test)
+    
+    last_b = beads_b[-1] if len(beads_b) > curr_beads_len else None
+    last_p = beads_p[-1] if len(beads_p) > curr_beads_len else None
+    
+    if last_b == 'RED' and last_p != 'RED':
+        return 'B'
+    elif last_p == 'RED' and last_b != 'RED':
+        return 'P'
+    elif last_b == 'RED' and last_p == 'RED':
+        return history[-1] if history else 'B'
     else:
-        # Nếu cả 2 đều không tạo đỏ, ưu tiên bắt theo ván trước
-        return opp_side, f"Dự phòng nhịp đổi: {opp_side}"
+        return 'P' if history and history[-1] == 'B' else 'B'
 
 # ==============================================================================
-# KHỞI TẠO SESSION STATE (BỘ NHỚ TRÌNH DUYỆT)
+# KHỞI TẠO BỘ NHỚ TRÌNH DUYỆT (SESSION STATE)
 # ==============================================================================
 today_str = datetime.date.today().strftime("%Y-%m-%d")
 
@@ -146,7 +164,7 @@ if "current_session_id" not in st.session_state:
     st.session_state["current_session_id"] = 1
 
 if "base_capital" not in st.session_state:
-    st.session_state["base_capital"] = 1000.0
+    st.session_state["base_capital"] = 5000.0
 
 if "session_running" not in st.session_state:
     st.session_state["session_running"] = True
@@ -163,42 +181,45 @@ if "order_in_session" not in st.session_state:
 if "table_bet_step" not in st.session_state:
     st.session_state["table_bet_step"] = 1
 
-if "last_bet_result" not in st.session_state:
-    st.session_state["last_bet_result"] = None
-
 if "current_stake" not in st.session_state:
     st.session_state["current_stake"] = st.session_state["base_capital"] * 0.10
 
+if "is_qualified" not in st.session_state:
+    st.session_state["is_qualified"] = False
+
+if "table_status_msg" not in st.session_state:
+    st.session_state["table_status_msg"] = "WAITING_FIRST_BEAD"
+
 # ==============================================================================
-# THANH BÊN (SIDEBAR): VỐN CƠ SỞ & THỐNG KÊ TOÀN DIỆN
+# THANH BÊN (SIDEBAR): QUẢN LÝ VỐN VÀ XUẤT BÁO CÁO
 # ==============================================================================
 with st.sidebar:
     st.markdown("## ⚙️ Cấu Hình Vốn & Phiên")
     
-    # Ô NHẬP VỐN CƠ SỞ: Cho phép sửa, thay đổi và có nút Reset
     new_base = st.number_input(
         "💵 VỐN CƠ SỞ (Có thể sửa đổi):",
         min_value=10.0,
         value=float(st.session_state["base_capital"]),
-        step=50.0
+        step=100.0
     )
     if new_base != st.session_state["base_capital"]:
         st.session_state["base_capital"] = new_base
         if st.session_state["order_in_session"] == 1:
             st.session_state["current_stake"] = new_base * 0.10
-        st.success("Đã cập nhật Vốn cơ sở mới!")
+        st.success("Đã cập nhật Vốn cơ sở!")
 
     col_btn_reset, col_btn_new_ses = st.columns(2)
     with col_btn_reset:
         if st.button("🔄 Reset Vốn", use_container_width=True):
-            st.session_state["base_capital"] = 1000.0
-            st.session_state["current_stake"] = 100.0
+            st.session_state["base_capital"] = 5000.0
+            st.session_state["current_stake"] = 500.0
             st.session_state["session_pnl"] = 0.0
             st.session_state["order_in_session"] = 1
             st.session_state["table_bet_step"] = 1
             st.session_state["session_running"] = True
             st.session_state["table_hands"] = []
-            st.session_state["last_bet_result"] = None
+            st.session_state["is_qualified"] = False
+            st.session_state["table_status_msg"] = "WAITING_FIRST_BEAD"
             st.rerun()
 
     with col_btn_new_ses:
@@ -210,16 +231,15 @@ with st.sidebar:
                 st.session_state["table_bet_step"] = 1
                 st.session_state["session_running"] = True
                 st.session_state["table_hands"] = []
-                st.session_state["last_bet_result"] = None
+                st.session_state["is_qualified"] = False
+                st.session_state["table_status_msg"] = "WAITING_FIRST_BEAD"
                 st.session_state["current_stake"] = st.session_state["base_capital"] * 0.10
                 st.rerun()
             else:
-                st.warning("Đã hoàn thành tối đa 4 phiên của ngày hôm nay!")
+                st.warning("Đã hoàn thành tối đa 4 phiên trong ngày!")
 
     st.markdown("---")
     st.markdown("### 📊 Thống Kê Tổng Hợp")
-    
-    # Tính lợi nhuận ngày
     total_day_pnl = sum([r["Tiền Lãi/Lỗ ($)"] for r in st.session_state["daily_history"]])
     
     st.metric("Phiên hiện tại", f"Phiên {st.session_state['current_session_id']} / 4")
@@ -234,7 +254,6 @@ with st.sidebar:
         delta=f"{(total_day_pnl / st.session_state['base_capital'])*100:+.1f}%"
     )
 
-    # Nút xuất file Excel
     st.markdown("---")
     if st.session_state["daily_history"]:
         df_export = pd.DataFrame(st.session_state["daily_history"])
@@ -244,7 +263,7 @@ with st.sidebar:
         excel_data = output.getvalue()
         
         st.download_button(
-            label="📥 Tải Nhật Ký Ra Excel",
+            label="📥 Tải Báo Cáo Ra Excel",
             data=excel_data,
             file_name=f"Baccarat_Log_{today_str}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -252,14 +271,12 @@ with st.sidebar:
         )
 
 # ==============================================================================
-# GIAO DIỆN CHÍNH: KHU VỰC CẢNH BÁO TÍN HIỆU RÕ RÀNG
+# GIAO DIỆN CHÍNH
 # ==============================================================================
-st.markdown("<h2 style='text-align: center; color: #1F4E78;'>🎯 BACCARAT BIG EYE ROAD & MONEY MANAGEMENT ENGINE</h2>", unsafe_allow_html=True)
-st.caption("<div style='text-align: center;'>Hệ Thống Phân Tích Bảng Phụ 1 Sang Hạt Đỏ & Cơ Chế Khóa Phiên Mục Tiêu 9.5% - 10%</div>", unsafe_allow_html=True)
+st.markdown("<h2 style='text-align: center; color: #1F4E78;'>🎯 BACCARAT AUTOMATIC ROAD & MONEY ENGINE</h2>", unsafe_allow_html=True)
 
-# 1. KIỂM TRA ĐIỀU KIỆN STOP LUÔN (CHỐT LÃI PHIÊN)
+# 1. KIỂM TRA ĐIỀU KIỆN CHỐT LÃI STOP LUÔN (+9.5% ~ 10%)
 target_min = st.session_state["base_capital"] * 0.095
-target_max = st.session_state["base_capital"] * 0.100
 
 if not st.session_state["session_running"] or st.session_state["session_pnl"] >= target_min:
     st.markdown("""
@@ -267,35 +284,57 @@ if not st.session_state["session_running"] or st.session_state["session_pnl"] >=
             🛑 CẢNH BÁO: STOP LUÔN! ĐẠT TARGET PHIÊN NÀY (+9.5% - 10%)! KHÓA PHIÊN!
         </div>
     """, unsafe_allow_html=True)
-    st.info(f"🎉 Bạn đã hoàn thành mục tiêu Phiên {st.session_state['current_session_id']} với lợi nhuận: **{st.session_state['session_pnl']:+,.2f}$**. Hãy bấm **'➕ Phiên Mới'** ở thanh bên trái khi bắt đầu phiên tiếp theo.")
+    st.success(f"🎉 Hoàn thành xuất sắc Phiên {st.session_state['current_session_id']}! Lợi nhuận: **{st.session_state['session_pnl']:+,.2f}$**. Bấm **'➕ Phiên Mới'** bên trái để bắt đầu phiên tiếp.")
 else:
-    # 2. TÍNH TOÁN VÀ CẢNH BÁO TÍN HIỆU TỪ BẢNG PHỤ 1
-    predicted_side, reason_text = predict_red_big_eye(st.session_state["table_hands"])
+    # 2. XÁC ĐỊNH TRẠNG THÁI BẢNG PHỤ 1
+    eye_beads = calculate_big_eye_beads(st.session_state["table_hands"])
+    predicted_target = None
     
     col_c1, col_c2 = st.columns([1.8, 1.2])
+    
     with col_c1:
         st.markdown(f"#### 📢 Tín Hiệu Vào Lệnh (Lệnh thứ {st.session_state['order_in_session']})")
         
-        if len(st.session_state["table_hands"]) < 2:
+        # TRƯỜNG HỢP A: BẢNG PHỤ 1 RA HẠT XANH -> BỎ BÀN TÌM BÀN MỚI
+        if st.session_state["table_status_msg"] == "BLUE_SKIP":
+            st.markdown("""
+                <div class="alert-skip-table">
+                    🛑 BẢNG PHỤ 1 VỪA RA HẠT XANH -> KHÔNG ĐỦ ĐIỀU KIỆN! BỎ BÀN NÀY, TÌM BÀN MỚI NGAY!
+                </div>
+            """, unsafe_allow_html=True)
+            if st.button("🔄 ĐÃ ĐỔI SANG BÀN MỚI TINH KHÁC", use_container_width=True, type="primary"):
+                st.session_state["table_hands"] = []
+                st.session_state["is_qualified"] = False
+                st.session_state["table_status_msg"] = "WAITING_FIRST_BEAD"
+                st.session_state["table_bet_step"] = 1
+                st.rerun()
+
+        # TRƯỜNG HỢP B: CHỜ HẠT ĐẦU TIÊN CỦA BẢNG PHỤ 1
+        elif not st.session_state["is_qualified"]:
             st.markdown("""
                 <div class="alert-wait">
-                    ⏳ VUI LÒNG NHẬP 2 VÁN MỒI CỦA BÀN MỚI ĐỂ BẢNG PHỤ 1 XUẤT HIỆN
+                    ⏳ ĐANG THEO DÕI BÀN MỚI: HÃY NHẬP KẾT QUẢ CÁC VÁN BÀI VỪA MỞ CHO ĐẾN KHI BẢNG PHỤ 1 RA HẠT ĐẦU TIÊN
                 </div>
             """, unsafe_allow_html=True)
-        elif predicted_side == "P":
-            st.markdown("""
-                <div class="alert-player">
-                    👉 CẢNH BÁO: ĐÁNH PLAYER (TẠO HẠT ĐỎ BẢNG PHỤ 1)
-                </div>
-            """, unsafe_allow_html=True)
-        elif predicted_side == "B":
-            st.markdown("""
-                <div class="alert-banker">
-                    👉 CẢNH BÁO: ĐÁNH BANKER (TẠO HẠT ĐỎ BẢNG PHỤ 1)
-                </div>
-            """, unsafe_allow_html=True)
-            
-        st.caption(f"🔍 Logic suy luận: {reason_text}")
+            hands_str = " - ".join(st.session_state["table_hands"]) if st.session_state["table_hands"] else "Chưa có ván nào"
+            st.caption(f"Lịch sử ván mồi bàn này: **[{hands_str}]** | Hạt Bảng Phụ 1 hiện có: **{len(eye_beads)}**")
+
+        # TRƯỜNG HỢP C: HẠT ĐẦU TIÊN LÀ ĐỎ -> ĐỦ ĐIỀU KIỆN! CẢNH BÁO LỆNH ĐÁNH!
+        else:
+            predicted_target = predict_side_for_red(st.session_state["table_hands"])
+            if predicted_target == "P":
+                st.markdown("""
+                    <div class="alert-player">
+                        👉 CẢNH BÁO: VÀO PLAYER (ĐỂ BẢNG PHỤ 1 RA HẠT ĐỎ)
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                    <div class="alert-banker">
+                        👉 CẢNH BÁO: VÀO BANKER (ĐỂ BẢNG PHỤ 1 RA HẠT ĐỎ)
+                    </div>
+                """, unsafe_allow_html=True)
+            st.caption(f"Trạng thái: Bảng phụ 1 đã có hạt Đỏ đầu tiên. Đang đánh **Ván {st.session_state['table_bet_step']} / 2 ván** tại bàn này.")
 
     with col_c2:
         st.markdown("#### 💵 Mức Tiền Cược Lệnh Này")
@@ -305,126 +344,134 @@ else:
             value=f"{st.session_state['current_stake']:,.2f} $",
             delta=f"{stake_rate:.0f}% Vốn cơ sở"
         )
-        st.caption(f"Trạng thái bàn hiện tại: **Ván {st.session_state['table_bet_step']} / 2 ván tối đa của bàn**")
+        st.caption(f"Mục tiêu chốt lãi phiên: **+{target_min:,.2f}$ (+9.5% ~ 10%)**")
 
     # ==============================================================================
-    # KHU VỰC NHẬP KẾT QUẢ VÁN BÀI VÀ CẬP NHẬT TRẠNG THÁI
+    # BẢNG ĐIỀU KHIỂN DUY NHẤT: BẤM KẾT QUẢ MỞ BÀI THỰC TẾ (BANKER / PLAYER / TIE)
     # ==============================================================================
     st.markdown("---")
-    st.markdown("### 🎲 Bảng Điều Khiển Nhập Kết Quả Thực Tế")
+    st.markdown("### 🎲 Nhập Kết Quả Thực Tế Mở Ra Tại Bàn (Hệ thống tự động so khớp & tính toán)")
     
-    # 2 Nút nhập ván mồi cho bàn mới
-    if len(st.session_state["table_hands"]) < 2:
-        st.write("Nhập kết quả các ván bài vừa mở tại bàn:")
-        btn_m1, btn_m2, btn_m3 = st.columns(3)
-        with btn_m1:
-            if st.button("➕ Nhập ván mở ra: BANKER (B)", use_container_width=True):
-                st.session_state["table_hands"].append("B")
-                st.rerun()
-        with btn_m2:
-            if st.button("➕ Nhập ván mở ra: PLAYER (P)", use_container_width=True):
-                st.session_state["table_hands"].append("P")
-                st.rerun()
-        with btn_m3:
-            if st.button("🔄 Xóa ván mồi bàn này", use_container_width=True):
-                st.session_state["table_hands"] = []
-                st.rerun()
-    else:
-        st.write("Sau khi vào lệnh xong, hãy bấm kết quả ván bài vừa rồi của bạn:")
-        col_act1, col_act2, col_act3 = st.columns(3)
+    col_btn_b, col_btn_p, col_btn_tie, col_btn_skip = st.columns([1.5, 1.5, 1, 1.2])
+
+    # HÀM XỬ LÝ KHI NGƯỜI DÙNG BẤM KẾT QUẢ VÁN MỚI
+    def handle_actual_result(actual):
+        st.session_state["table_hands"].append(actual)
+        current_beads = calculate_big_eye_beads(st.session_state["table_hands"])
         
-        # Xử lý khi WIN
-        with col_act1:
-            if st.button("✅ LỆNH VỪA RỒI THẮNG (WIN)", use_container_width=True, type="primary"):
-                stake = st.session_state["current_stake"]
-                # Banker ăn 95%, Player ăn 100%
-                win_profit = (stake * 0.95) if predicted_side == "B" else stake
-                
-                st.session_state["session_pnl"] += win_profit
-                
-                # Lưu lịch sử
-                st.session_state["daily_history"].append({
-                    "Ngày": today_str,
-                    "Phiên": st.session_state["current_session_id"],
-                    "STT Lệnh": st.session_state["order_in_session"],
-                    "Cửa Đánh": "BANKER" if predicted_side == "B" else "PLAYER",
-                    "Tiền Cược ($)": stake,
-                    "Kết Quả": "WIN",
-                    "Tiền Lãi/Lỗ ($)": win_profit,
-                    "Lợi Nhuận Lũy Kế ($)": st.session_state["session_pnl"]
-                })
-                
-                # KIỂM TRA ĐIỀU KIỆN 1: Nếu là Lệnh 1 của phiên mà WIN -> STOP LUÔN
-                if st.session_state["order_in_session"] == 1:
-                    st.session_state["session_running"] = False
-                    st.rerun()
-                    
-                # KIỂM TRA ĐIỀU KIỆN CHỐT TARGET PHIÊN (+9.5% - 10%)
-                if st.session_state["session_pnl"] >= target_min:
-                    st.session_state["session_running"] = False
-                    st.rerun()
-                    
-                # QUY TẮC BÀN: Nếu ván 1 WIN -> Dừng bàn cũ, đổi bàn mới tinh
-                if st.session_state["table_bet_step"] == 1:
-                    st.session_state["table_hands"] = []
-                    st.session_state["table_bet_step"] = 1
+        # 1. NẾU CHƯA ĐỦ ĐIỀU KIỆN (ĐANG CHỜ HẠT ĐẦU TIÊN CỦA BẢNG PHỤ 1)
+        if not st.session_state["is_qualified"]:
+            if len(current_beads) > 0:
+                first_bead = current_beads[0]
+                if first_bead == 'RED':
+                    st.session_state["is_qualified"] = True
+                    st.session_state["table_status_msg"] = "RED_TRIGGERED"
                 else:
-                    # Đã đánh xong ván 2 -> Chuyển bàn
-                    st.session_state["table_hands"] = []
-                    st.session_state["table_bet_step"] = 1
-                    
-                # QUY TẮC ĐI TIỀN:
-                # Nếu vốn hiện tại giật về bằng hoặc lớn hơn vốn cơ sở ban đầu -> BẮT BUỘC RESET VỀ 10%
-                if st.session_state["session_pnl"] >= 0:
-                    st.session_state["current_stake"] = st.session_state["base_capital"] * 0.10
-                else:
-                    # Nếu vẫn đang âm: lệnh trước WIN -> lệnh này gấp đôi (20%)
-                    st.session_state["current_stake"] = st.session_state["base_capital"] * 0.20
-                    
-                st.session_state["order_in_session"] += 1
-                st.session_state["last_bet_result"] = "WIN"
-                st.rerun()
+                    st.session_state["is_qualified"] = False
+                    st.session_state["table_status_msg"] = "BLUE_SKIP"
+            return
 
-        # Xử lý khi LOSE
-        with col_act2:
-            if st.button("❌ LỆNH VỪA RỒI THUA (LOSE)", use_container_width=True):
-                stake = st.session_state["current_stake"]
-                st.session_state["session_pnl"] -= stake
+        # 2. NẾU ĐÃ ĐỦ ĐIỀU KIỆN VÀ ĐANG VÀO LỆNH (SO SÁNH DỰ ĐOÁN VS THỰC TẾ)
+        pred = predicted_target
+        stake = st.session_state["current_stake"]
+        
+        if actual == pred:
+            # === KỊCH BẢN THẮNG (WIN) ===
+            win_profit = (stake * 0.95) if actual == "B" else float(stake)
+            st.session_state["session_pnl"] += win_profit
+            
+            st.session_state["daily_history"].append({
+                "Ngày": today_str,
+                "Phiên": st.session_state["current_session_id"],
+                "STT Lệnh": st.session_state["order_in_session"],
+                "Cửa Đánh": "BANKER" if pred == "B" else "PLAYER",
+                "Kết Quả Ra": "BANKER" if actual == "B" else "PLAYER",
+                "Phán Đoán": "WIN ✅",
+                "Tiền Cược ($)": stake,
+                "Lãi/Lỗ ($)": win_profit,
+                "Lợi Nhuận Lũy Kế ($)": st.session_state["session_pnl"]
+            })
+            
+            # ĐIỀU KIỆN 1: Lệnh 1 của phiên WIN -> KHÓA PHIÊN NGAY LẬP TỨC!
+            if st.session_state["order_in_session"] == 1:
+                st.session_state["session_running"] = False
+                return
                 
-                st.session_state["daily_history"].append({
-                    "Ngày": today_str,
-                    "Phiên": st.session_state["current_session_id"],
-                    "STT Lệnh": st.session_state["order_in_session"],
-                    "Cửa Đánh": "BANKER" if predicted_side == "B" else "PLAYER",
-                    "Tiền Cược ($)": stake,
-                    "Kết Quả": "LOSE",
-                    "Tiền Lãi/Lỗ ($)": -stake,
-                    "Lợi Nhuận Lũy Kế ($)": st.session_state["session_pnl"]
-                })
+            # ĐIỀU KIỆN 2: Đạt mục tiêu +9.5% ~ 10% -> STOP LUÔN
+            if st.session_state["session_pnl"] >= target_min:
+                st.session_state["session_running"] = False
+                return
                 
-                # QUY TẮC BÀN: Nếu ván 1 LOSE -> Ở lại bàn đó đánh tiếp ván 2
-                if st.session_state["table_bet_step"] == 1:
-                    st.session_state["table_bet_step"] = 2
-                    # Ghi nhận kết quả ván bài để cập nhật Big Road
-                    st.session_state["table_hands"].append("P" if predicted_side == "B" else "B")
-                else:
-                    # Đã hết ván 2 -> Đổi bàn mới tinh
-                    st.session_state["table_hands"] = []
-                    st.session_state["table_bet_step"] = 1
-                    
-                # QUY TẮC ĐI TIỀN: Lệnh trước LOSE -> Luôn đánh bằng tiền cơ sở (10%)
+            # QUY TẮC ĐỔI BÀN: Thắng ván 1 -> Đổi bàn mới tinh ngay!
+            st.session_state["table_hands"] = []
+            st.session_state["is_qualified"] = False
+            st.session_state["table_status_msg"] = "WAITING_FIRST_BEAD"
+            st.session_state["table_bet_step"] = 1
+            
+            # QUY TẮC ĐI TIỀN:
+            # Nếu vốn hồi phục >= vốn cơ sở -> BẮT BUỘC RESET 10%
+            if st.session_state["session_pnl"] >= 0:
                 st.session_state["current_stake"] = st.session_state["base_capital"] * 0.10
-                st.session_state["order_in_session"] += 1
-                st.session_state["last_bet_result"] = "LOSE"
-                st.rerun()
+            else:
+                # Nếu vẫn đang âm: ván trước WIN -> ván sau gấp đôi 20%
+                st.session_state["current_stake"] = st.session_state["base_capital"] * 0.20
+                
+            st.session_state["order_in_session"] += 1
 
-        # Xử lý khi TIE (HÒA)
-        with col_act3:
-            if st.button("⏸ VÁN RA HÒA (TIE - HOÀN TIỀN)", use_container_width=True):
-                st.info("Ván Hòa hoàn tiền! Giữ nguyên vị trí lệnh và số tiền cược.")
+        else:
+            # === KỊCH BẢN THUA (LOSE) ===
+            st.session_state["session_pnl"] -= float(stake)
+            
+            st.session_state["daily_history"].append({
+                "Ngày": today_str,
+                "Phiên": st.session_state["current_session_id"],
+                "STT Lệnh": st.session_state["order_in_session"],
+                "Cửa Đánh": "BANKER" if pred == "B" else "PLAYER",
+                "Kết Quả Ra": "BANKER" if actual == "B" else "PLAYER",
+                "Phán Đoán": "LOSE ❌",
+                "Tiền Cược ($)": stake,
+                "Lãi/Lỗ ($)": -stake,
+                "Lợi Nhuận Lũy Kế ($)": st.session_state["session_pnl"]
+            })
+            
+            # QUY TẮC BÀN: Thua ván 1 -> Vào tiếp ván 2 của bàn đó
+            if st.session_state["table_bet_step"] == 1:
+                st.session_state["table_bet_step"] = 2
+            else:
+                # Đã thua ván 2 -> Chuyển bàn mới tinh
+                st.session_state["table_hands"] = []
+                st.session_state["is_qualified"] = False
+                st.session_state["table_status_msg"] = "WAITING_FIRST_BEAD"
+                st.session_state["table_bet_step"] = 1
+                
+            # QUY TẮC ĐI TIỀN: Thua -> Luôn đánh bằng tiền cơ sở (10%)
+            st.session_state["current_stake"] = st.session_state["base_capital"] * 0.10
+            st.session_state["order_in_session"] += 1
+
+    with col_btn_b:
+        if st.button("🔴 VÁN RA: BANKER", use_container_width=True, type="primary"):
+            handle_actual_result("B")
+            st.rerun()
+
+    with col_btn_p:
+        if st.button("🔵 VÁN RA: PLAYER", use_container_width=True):
+            handle_actual_result("P")
+            st.rerun()
+
+    with col_btn_tie:
+        if st.button("⏸ VÁN RA: HÒA (TIE)", use_container_width=True):
+            st.info("Ván Hòa hoàn tiền! Giữ nguyên vị trí cược và vốn.")
+
+    with col_btn_skip:
+        if st.button("🔄 Đổi Bàn Mới Tinh", use_container_width=True):
+            st.session_state["table_hands"] = []
+            st.session_state["is_qualified"] = False
+            st.session_state["table_status_msg"] = "WAITING_FIRST_BEAD"
+            st.session_state["table_bet_step"] = 1
+            st.rerun()
 
 # ==============================================================================
-# BẢNG NHẬT KÝ CHI TIẾT THEO PHIÊN & NGÀY
+# NHẬT KÝ CHI TIẾT THEO PHIÊN & NGÀY
 # ==============================================================================
 st.markdown("---")
 st.markdown(f"### 📋 Nhật Ký Vào Lệnh Hôm Nay ({today_str})")
@@ -432,4 +479,4 @@ if st.session_state["daily_history"]:
     df_history = pd.DataFrame(st.session_state["daily_history"])
     st.dataframe(df_history.iloc[::-1], use_container_width=True, hide_index=True)
 else:
-    st.caption("Chưa có lệnh nào được ghi nhận trong ngày hôm nay. Hãy bắt đầu vào lệnh ván đầu tiên!")
+    st.caption("Chưa có lệnh nào được ghi nhận. Hãy bắt đầu nhập kết quả ván mở bài đầu tiên!")
