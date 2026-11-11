@@ -138,7 +138,7 @@ st.markdown("""
         margin-bottom: 8px;
     }
 
-    /* MÀU NỀN 3 NÚT NHẬP KẾT QUẢ */
+    /* MÀU NỀN 3 NÚT BẤM KẾT QUẢ */
     div.row-widget.stButton > button, div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
         background-color: #0052cc !important;
         color: #ffffff !important;
@@ -176,21 +176,24 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# HÀM LOGIC TÍNH BẢNG PHỤ 1 (BIG EYE BOY) CHUẨN XÁC QUỐC TẾ
+# HÀM LOGIC TÍNH BẢNG PHỤ 1 (BIG EYE BOY) CHUẨN XÁC 100% QUỐC TẾ
 # ==============================================================================
 def calculate_big_eye_boy(hands):
+    """
+    Quy tắc chuẩn quốc tế của Big Eye Road (Derived Roads):
+    - Bắt đầu tính từ: (Cột 2, dòng >= 2) hoặc (Cột >= 3, dòng 1)
+    1. Khi mở cột mới (is_new_col = True):
+       - So sánh độ dài 2 cột liền kề trước đó:
+       - Nếu Col[k-2] == Col[k-3] -> ĐỎ
+       - Nếu Col[k-2] != Col[k-3] -> XANH
+    2. Khi đi tiếp xuống dưới (is_new_col = False):
+       - So sánh Row hiện tại với độ dài cột bên trái (Left_Len = Col[k-2]):
+       - Nếu Row <= Left_Len: ĐỎ (có hạt đối xứng)
+       - Nếu Row == Left_Len + 1: XANH (vừa rơi khỏi độ dài đối xứng)
+       - Nếu Row > Left_Len + 1: ĐỎ (dây bệt Streak/Dragon tiếp tục kéo dài)
+    """
     if len(hands) < 2:
         return []
-    
-    cols = []
-    curr = [hands[0]]
-    for h in hands[1:]:
-        if h == curr[-1]:
-            curr.append(h)
-        else:
-            cols.append(curr)
-            curr = [h]
-    cols.append(curr)
     
     big_eye = []
     temp_cols = []
@@ -207,27 +210,33 @@ def calculate_big_eye_boy(hands):
             is_new = True
             
         all_c = temp_cols + [curr_c]
-        k = len(all_c)
-        row = len(curr_c)
+        k = len(all_c)     # Cột hiện tại (1-based)
+        row = len(curr_c)  # Dòng hiện tại trong cột (1-based)
         
+        # Bắt đầu vẽ từ Cột 2 dòng >= 2 hoặc Cột >= 3
         if (k == 2 and row >= 2) or (k >= 3):
-            if not is_new:
+            if is_new:
+                # Mở cột mới: so sánh độ dài 2 cột trước đó
+                len1 = len(all_c[k - 2])
+                len2 = len(all_c[k - 3])
+                big_eye.append('RED' if len1 == len2 else 'BLUE')
+            else:
+                # Đi xuống trong cùng cột:
                 left_len = len(all_c[k - 2])
                 if row <= left_len:
                     big_eye.append('RED')
-                else:
+                elif row == left_len + 1:
                     big_eye.append('BLUE')
-            else:
-                len_prev1 = len(all_c[k - 2])
-                len_prev2 = len(all_c[k - 3])
-                if len_prev1 == len_prev2:
+                else:
+                    # BỆT KÉO DÀI (STREAK) -> ĐỎ
                     big_eye.append('RED')
-                else:
-                    big_eye.append('BLUE')
                     
     return big_eye
 
 def predict_next_hand_for_red(hands):
+    """
+    Thử nghiệm ván sau ra B hay P thì hạt tiếp theo của Bảng Phụ 1 là RED
+    """
     eye_now = calculate_big_eye_boy(hands)
     eye_b = calculate_big_eye_boy(hands + ['B'])
     eye_p = calculate_big_eye_boy(hands + ['P'])
@@ -240,11 +249,12 @@ def predict_next_hand_for_red(hands):
     elif p_gives_red and not b_gives_red:
         return 'P', "Đánh PLAYER để Bảng Phụ 1 ra Hạt Đỏ"
     elif b_gives_red and p_gives_red:
-        opp = 'P' if hands[-1] == 'B' else 'B'
-        return opp, f"Cả 2 đều Đỏ -> Bắt nhịp cầu nhảy: {opp}"
+        # Nếu cả 2 đều tạo đỏ, theo luật bám dây cùng màu với ván trước
+        curr = hands[-1] if hands else 'B'
+        return curr, f"Cả 2 đều tạo Đỏ -> Bám thế bệt: {curr}"
     else:
-        opp = 'P' if hands[-1] == 'B' else 'B'
-        return opp, f"Dự phòng nhịp đổi: {opp}"
+        curr = hands[-1] if hands else 'B'
+        return curr, f"Ưu tiên nhịp cầu: {curr}"
 
 # ==============================================================================
 # KHỞI TẠO BỘ NHỚ TRÌNH DUYỆT (SESSION STATE)
@@ -284,9 +294,6 @@ if "current_stake" not in st.session_state:
 if "table_state" not in st.session_state:
     st.session_state["table_state"] = "WAIT"
 
-# ==============================================================================
-# HÀM TIỆN ÍCH: ĐỔI SANG BÀN MỚI TINH
-# ==============================================================================
 def switch_to_new_table():
     st.session_state["table_hands"] = []
     st.session_state["table_state"] = "WAIT"
@@ -406,7 +413,6 @@ else:
     with col_c1:
         st.markdown(f"<div class='table-badge'>🏢 ĐANG Ở BÀN SỐ {st.session_state['table_id']} | LỆNH THỨ {st.session_state['order_in_session']} CỦA PHIÊN</div>", unsafe_allow_html=True)
         
-        # TRƯỜNG HỢP 1: BẢNG PHỤ 1 RA XANH -> BỎ BÀN
         if st.session_state["table_state"] == "BLUE_SKIP":
             st.markdown("""
                 <div class="alert-skip-table">
@@ -414,7 +420,6 @@ else:
                 </div>
             """, unsafe_allow_html=True)
 
-        # TRƯỜNG HỢP 2: ĐANG CHỜ HẠT ĐẦU TIÊN
         elif st.session_state["table_state"] == "WAIT":
             st.markdown("""
                 <div class="alert-wait">
@@ -422,7 +427,6 @@ else:
                 </div>
             """, unsafe_allow_html=True)
 
-        # TRƯỜNG HỢP 3: ĐỦ ĐIỀU KIỆN VÀO LỆNH
         elif st.session_state["table_state"] == "RED_READY":
             predicted_side, reason_text = predict_next_hand_for_red(st.session_state["table_hands"])
             
@@ -491,17 +495,15 @@ else:
             switch_to_new_table()
 
     # ==============================================================================
-    # KHU VỰC ĐIỀU KHIỂN & NÚT ĐỔI BÀN MỚI TINH RÕ RÀNG
+    # KHU VỰC ĐIỀU KHIỂN & NÚT ĐỔI BÀN
     # ==============================================================================
     st.markdown("---")
     
-    # NẾU GẶP BÀN HẠT XANH -> HIỂN THỊ NÚT TO ĐỂ ĐỔI BÀN, KHÓA NHẬP KẾT QUẢ CŨ
     if st.session_state["table_state"] == "BLUE_SKIP":
         st.markdown("<h3 style='color: #d32f2f; text-align: center;'>⚠️ BÀN NÀY ĐÃ BỊ HỦY DO HẠT ĐẦU TIÊN RA XANH</h3>", unsafe_allow_html=True)
         if st.button("🔄 BẤM VÀO ĐÂY ĐỂ ĐỔI SANG BÀN MỚI TINH (RESET BÀN)", use_container_width=True, type="primary"):
             switch_to_new_table()
     else:
-        # ĐANG CHỜ HOẶC ĐANG VÀO LỆNH: HIỂN THỊ 3 NÚT NHẬP KẾT QUẢ
         st.markdown("### 🎲 Nhập Kết Quả Ván Bài Vừa Mở Tại Bàn")
         
         col_btn_p, col_btn_b, col_btn_t = st.columns(3)
@@ -539,7 +541,7 @@ else:
                         st.session_state["session_running"] = False
                         st.rerun()
                         
-                    # Thắng ván 1 hoặc ván 2 -> Chuyển bàn mới
+                    # Thắng ván 1 hoặc 2 -> Chuyển bàn mới
                     st.session_state["table_hands"] = []
                     st.session_state["table_state"] = "WAIT"
                     st.session_state["table_bet_step"] = 1
@@ -569,12 +571,12 @@ else:
                         "Lợi Nhuận Lũy Kế ($)": st.session_state["session_pnl"]
                     })
                     
-                    # Ván 1 Thua -> Tiếp tục Ván 2
+                    # Ván 1 Thua -> Tiếp tục Ván 2 của bàn đó
                     if current_step == 1:
                         st.session_state["table_bet_step"] = 2
                         st.session_state["table_hands"].append(actual_result)
                     else:
-                        # Đã xong Ván 2 mà Thua -> Đổi sang bàn mới
+                        # Xong Ván 2 mà Thua -> Đổi bàn mới
                         st.session_state["table_hands"] = []
                         st.session_state["table_state"] = "WAIT"
                         st.session_state["table_bet_step"] = 1
