@@ -6,124 +6,121 @@ import io
 st.set_page_config(
     page_title="Big Eye Engine",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # ==============================================================================
-# CSS TỐI ƯU SIÊU GỌN CHO MÀN HÌNH ĐIỆN THOẠI (MOBILE FIRST)
+# CSS GIAO DIỆN CẢNH BÁO, HẠT TRÒN & Ô TIỀN ĐỒNG BỘ MÀU SẮC
 # ==============================================================================
 st.markdown("""
 <style>
-    /* Giảm lề trên cùng của Streamlit để tràn viền điện thoại */
+    /* Giảm lề trên cùng để giao diện gọn gàng */
     .block-container {
-        padding-top: 1rem !important;
+        padding-top: 1.5rem !important;
         padding-bottom: 2rem !important;
-        padding-left: 0.8rem !important;
-        padding-right: 0.8rem !important;
-    }
-    header[data-testid="stHeader"] {
-        display: none !important;
     }
 
     /* KHỐI CẢNH BÁO ĐẬP VÀO MẮT */
     .alert-player {
         background-color: #0052cc;
         color: #ffffff;
-        padding: 18px 12px;
+        padding: 22px 14px;
         border-radius: 12px;
         text-align: center;
-        font-size: 26px;
+        font-size: 32px;
         font-weight: 900;
-        letter-spacing: 1px;
+        letter-spacing: 2px;
         box-shadow: 0 4px 15px rgba(0, 82, 204, 0.4);
-        margin: 8px 0;
+        margin: 10px 0;
     }
     .alert-banker {
         background-color: #d32f2f;
         color: #ffffff;
-        padding: 18px 12px;
+        padding: 22px 14px;
         border-radius: 12px;
         text-align: center;
-        font-size: 26px;
+        font-size: 32px;
         font-weight: 900;
-        letter-spacing: 1px;
+        letter-spacing: 2px;
         box-shadow: 0 4px 15px rgba(211, 47, 47, 0.4);
-        margin: 8px 0;
+        margin: 10px 0;
     }
     .alert-stop {
         background-color: #ffffff;
         color: #d32f2f;
         border: 4px solid #d32f2f;
-        padding: 18px 12px;
+        padding: 22px 14px;
         border-radius: 12px;
         text-align: center;
-        font-size: 28px;
+        font-size: 32px;
         font-weight: 900;
+        letter-spacing: 2px;
         animation: pulse 1.5s infinite;
-        margin: 8px 0;
+        margin: 10px 0;
     }
     .alert-skip-table {
         background-color: #fff0f0;
         color: #d32f2f;
         border: 3px solid #ff4d4f;
-        padding: 16px 10px;
+        padding: 20px 12px;
         border-radius: 12px;
         text-align: center;
-        font-size: 22px;
+        font-size: 26px;
         font-weight: 900;
-        margin: 8px 0;
+        margin: 10px 0;
     }
     .alert-wait {
         background-color: #f4f5f7;
         color: #42526e;
         border: 2px dashed #97a0af;
-        padding: 18px 10px;
+        padding: 22px 12px;
         border-radius: 12px;
         text-align: center;
-        font-size: 24px;
+        font-size: 26px;
         font-weight: 900;
-        margin: 8px 0;
+        margin: 10px 0;
     }
 
-    /* Ô HIỂN THỊ TIỀN CƯỢC */
+    /* Ô TIỀN CƯỢC ĐỒNG MÀU DỰ ĐOÁN */
     .stake-box-player {
         background-color: #0052cc;
         color: #ffffff;
-        padding: 14px 8px;
+        padding: 16px 10px;
         border-radius: 12px;
         text-align: center;
-        box-shadow: 0 4px 10px rgba(0, 82, 204, 0.3);
+        box-shadow: 0 4px 12px rgba(0, 82, 204, 0.3);
         margin-bottom: 8px;
     }
     .stake-box-banker {
         background-color: #d32f2f;
         color: #ffffff;
-        padding: 14px 8px;
+        padding: 16px 10px;
         border-radius: 12px;
         text-align: center;
-        box-shadow: 0 4px 10px rgba(211, 47, 47, 0.3);
+        box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
         margin-bottom: 8px;
     }
     .stake-box-neutral {
         background-color: #f4f5f7;
         color: #172b4d;
         border: 2px solid #dfe1e6;
-        padding: 14px 8px;
+        padding: 16px 10px;
         border-radius: 12px;
         text-align: center;
         margin-bottom: 8px;
     }
     .stake-amount {
-        font-size: 28px;
+        font-size: 32px;
         font-weight: 900;
+        letter-spacing: 1px;
     }
 
-    /* Ô ÂM / DƯƠNG PHIÊN */
+    /* Ô THỐNG KÊ ÂM / DƯƠNG PHIÊN */
     .pnl-box-negative {
         background-color: #ffebe6;
         border: 2px solid #ff8f73;
         color: #de350b;
-        padding: 14px 8px;
+        padding: 16px 10px;
         border-radius: 12px;
         text-align: center;
         margin-bottom: 8px;
@@ -132,7 +129,7 @@ st.markdown("""
         background-color: #e3fcef;
         border: 2px solid #57d9a3;
         color: #00875a;
-        padding: 14px 8px;
+        padding: 16px 10px;
         border-radius: 12px;
         text-align: center;
         margin-bottom: 8px;
@@ -141,14 +138,15 @@ st.markdown("""
         background-color: #f4f5f7;
         border: 2px solid #dfe1e6;
         color: #42526e;
-        padding: 14px 8px;
+        padding: 16px 10px;
         border-radius: 12px;
         text-align: center;
         margin-bottom: 8px;
     }
     .pnl-amount {
-        font-size: 28px;
+        font-size: 32px;
         font-weight: 900;
+        letter-spacing: 1px;
     }
 
     /* HẠT TRÒN BIG ROAD */
@@ -156,70 +154,74 @@ st.markdown("""
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 32px;
-        height: 32px;
+        width: 36px;
+        height: 36px;
         border-radius: 50%;
         background-color: #d32f2f;
         color: #ffffff;
         font-weight: 900;
-        font-size: 16px;
-        margin: 2px;
+        font-size: 18px;
+        margin: 3px;
+        box-shadow: 0 2px 5px rgba(211, 47, 47, 0.4);
     }
     .bead-p {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 32px;
-        height: 32px;
+        width: 36px;
+        height: 36px;
         border-radius: 50%;
         background-color: #0052cc;
         color: #ffffff;
         font-weight: 900;
-        font-size: 16px;
-        margin: 2px;
+        font-size: 18px;
+        margin: 3px;
+        box-shadow: 0 2px 5px rgba(0, 82, 204, 0.4);
     }
     /* HẠT TRÒN BẢNG PHỤ 1 */
     .eye-circle-red {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 26px;
-        height: 26px;
+        width: 30px;
+        height: 30px;
         border-radius: 50%;
-        border: 3.5px solid #d32f2f;
+        border: 4px solid #d32f2f;
         background-color: #ffffff;
-        margin: 2px;
+        margin: 3px;
+        box-shadow: 0 2px 4px rgba(211, 47, 47, 0.2);
     }
     .eye-circle-blue {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 26px;
-        height: 26px;
+        width: 30px;
+        height: 30px;
         border-radius: 50%;
-        border: 3.5px solid #0052cc;
+        border: 4px solid #0052cc;
         background-color: #ffffff;
-        margin: 2px;
+        margin: 3px;
+        box-shadow: 0 2px 4px rgba(0, 82, 204, 0.2);
     }
     .table-badge {
         display: inline-block;
         background-color: #ebecf0;
         color: #172b4d;
-        padding: 4px 10px;
-        border-radius: 16px;
-        font-size: 14px;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 16px;
         font-weight: bold;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
     }
 
-    /* 2 NÚT BẤM TO CHIA ĐỀU 50-50 DÀNH RIÊNG CHO ĐIỆN THOẠI */
+    /* MÀU NỀN 2 NÚT BẤM KẾT QUẢ DUY NHẤT */
     div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
         background-color: #0052cc !important;
         color: #ffffff !important;
         font-weight: 900 !important;
         font-size: 18px !important;
         border: none !important;
-        height: 60px !important;
+        height: 58px !important;
         border-radius: 10px !important;
         box-shadow: 0 4px 10px rgba(0, 82, 204, 0.3) !important;
     }
@@ -229,7 +231,7 @@ st.markdown("""
         font-weight: 900 !important;
         font-size: 18px !important;
         border: none !important;
-        height: 60px !important;
+        height: 58px !important;
         border-radius: 10px !important;
         box-shadow: 0 4px 10px rgba(211, 47, 47, 0.3) !important;
     }
@@ -348,12 +350,13 @@ def switch_to_new_table():
     st.rerun()
 
 # ==============================================================================
-# THANH BÊN (SIDEBAR)
+# THANH BÊN (SIDEBAR): VỐN CƠ SỞ (SỬA ĐƯỢC, RESET ĐƯỢC)
 # ==============================================================================
 with st.sidebar:
-    st.markdown("## ⚙️ Cấu Hình Vốn")
+    st.markdown("## ⚙️ Cấu Hình Vốn & Phiên")
+    
     new_base = st.number_input(
-        "💵 VỐN CƠ SỞ:",
+        "💵 VỐN CƠ SỞ (Sửa đổi & Tự động lưu):",
         min_value=10.0,
         value=float(st.session_state["base_capital"]),
         step=100.0
@@ -392,23 +395,38 @@ with st.sidebar:
                 st.session_state["current_stake"] = st.session_state["base_capital"] * 0.10
                 st.rerun()
             else:
-                st.warning("Đã hoàn thành tối đa 4 phiên!")
+                st.warning("Đã hoàn thành tối đa 4 phiên trong ngày!")
 
     st.markdown("---")
+    st.markdown("### 📊 Thống Kê Lợi Nhuận")
+    
+    # Sửa lỗi KeyError: Dùng get an toàn cho mọi phiên bản dữ liệu
+    total_day_pnl = sum([r.get("Tiền Lãi/Lỗ ($)", r.get("Lãi/Lỗ", 0.0)) for r in st.session_state["daily_history"]])
+    
     st.metric("Phiên hiện tại", f"Phiên {st.session_state['current_session_id']} / 4")
-    total_day_pnl = sum([r["Tiền Lãi/Lỗ ($)"] for r in st.session_state["daily_history"]])
-    st.metric("Tổng Lãi/Lỗ Hôm Nay", f"{total_day_pnl:+,.2f} $")
+    st.metric(
+        "Lợi Nhuận Phiên ($)",
+        f"{st.session_state['session_pnl']:+,.2f} $",
+        delta=f"{(st.session_state['session_pnl'] / st.session_state['base_capital'])*100:+.1f}%"
+    )
+    st.metric(
+        "Tổng Lợi Nhuận Hôm Nay ($)",
+        f"{total_day_pnl:+,.2f} $",
+        delta=f"{(total_day_pnl / st.session_state['base_capital'])*100:+.1f}%"
+    )
 
+    st.markdown("---")
     if st.session_state["daily_history"]:
         df_export = pd.DataFrame(st.session_state["daily_history"])
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_export.to_excel(writer, index=False, sheet_name="Nhat_Ky_Vao_Lenh")
         excel_data = output.getvalue()
+        
         st.download_button(
-            label="📥 Tải Nhật Ký Excel",
+            label="📥 Tải Nhật Ký Ra Excel",
             data=excel_data,
-            file_name=f"Baccarat_{today_str}.xlsx",
+            file_name=f"Baccarat_Log_{today_str}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -421,7 +439,7 @@ target_min = st.session_state["base_capital"] * 0.095
 if not st.session_state["session_running"] or st.session_state["session_pnl"] >= target_min:
     st.markdown("""
         <div class="alert-stop">
-            🛑 CẢNH BÁO: STOP LUÔN! ĐẠT TARGET (+9.5% - 10%)! KHÓA PHIÊN!
+            🛑 CẢNH BÁO: STOP LUÔN! ĐẠT TARGET PHIÊN NÀY (+9.5% - 10%)! KHÓA PHIÊN!
         </div>
     """, unsafe_allow_html=True)
     st.success(f"🎉 Hoàn thành Phiên {st.session_state['current_session_id']}! Lợi nhuận: **{st.session_state['session_pnl']:+,.2f}$**.")
@@ -439,121 +457,159 @@ else:
     predicted_side = None
     reason_text = ""
     
-    # DÒNG THÔNG BÁO VỊ TRÍ BÀN & LỆNH
-    st.markdown(f"<div class='table-badge'>🏢 BÀN {st.session_state['table_id']} | LỆNH THỨ {st.session_state['order_in_session']} (PHIÊN {st.session_state['current_session_id']})</div>", unsafe_allow_html=True)
-
-    # KHU VỰC CẢNH BÁO
-    if st.session_state["table_state"] == "BLUE_SKIP":
-        st.markdown("""
-            <div class="alert-skip-table">
-                🛑 HẠT ĐẦU RA XANH -> BỎ BÀN NÀY, TÌM BÀN MỚI!
-            </div>
-        """, unsafe_allow_html=True)
-    elif st.session_state["table_state"] == "WAIT":
-        # ĐÃ RÚT GỌN THÀNH "⏳ CHỜ ĐỦ ĐIỀU KIỆN"
-        st.markdown("""
-            <div class="alert-wait">
-                ⏳ CHỜ ĐỦ ĐIỀU KIỆN
-            </div>
-        """, unsafe_allow_html=True)
-    elif st.session_state["table_state"] == "RED_READY":
-        predicted_side, reason_text = predict_next_hand_for_red(st.session_state["table_hands"])
-        
-        step_label = "VÁN 1" if st.session_state["table_bet_step"] == 1 else "VÁN 2 (LỆNH CUỐI BÀN)"
-        if predicted_side == "P":
-            st.markdown(f"""
-                <div class="alert-player">
-                    👉 VÀO PLAYER ({step_label})
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-                <div class="alert-banker">
-                    👉 VÀO BANKER ({step_label})
-                </div>
-            """, unsafe_allow_html=True)
-
-    # 2 Ô THÔNG SỐ: MỨC CƯỢC & ÂM/DƯƠNG
-    col_c1, col_c2 = st.columns(2)
+    # 3 CỘT: CẢNH BÁO | MỨC CƯỢC ĐỒNG MÀU | ÂM DƯƠNG PHIÊN
+    col_c1, col_c2, col_c3 = st.columns([1.6, 1.1, 1.1])
+    
     with col_c1:
+        st.markdown(f"<div class='table-badge'>🏢 ĐANG Ở BÀN SỐ {st.session_state['table_id']} | LỆNH THỨ {st.session_state['order_in_session']} CỦA PHIÊN</div>", unsafe_allow_html=True)
+        
+        if st.session_state["table_state"] == "BLUE_SKIP":
+            st.markdown("""
+                <div class="alert-skip-table">
+                    🛑 HẠT ĐẦU TIÊN LÀ XANH -> BỎ BÀN NÀY, TÌM BÀN MỚI NGAY!
+                </div>
+            """, unsafe_allow_html=True)
+
+        elif st.session_state["table_state"] == "WAIT":
+            # RÚT GỌN CHỮ CHỜ ĐÚNG THEO YÊU CẦU
+            st.markdown("""
+                <div class="alert-wait">
+                    ⏳ CHỜ ĐỦ ĐIỀU KIỆN
+                </div>
+            """, unsafe_allow_html=True)
+
+        elif st.session_state["table_state"] == "RED_READY":
+            predicted_side, reason_text = predict_next_hand_for_red(st.session_state["table_hands"])
+            
+            step_label = "VÁN 1 (LỆNH MỞ BÀN)" if st.session_state["table_bet_step"] == 1 else "VÁN 2 (LỆNH CUỐI CỦA BÀN NÀY)"
+            st.markdown(f"**Trạng thái bàn hiện tại:** `{step_label}`")
+            
+            if predicted_side == "P":
+                st.markdown("""
+                    <div class="alert-player">
+                        👉 CẢNH BÁO: ĐÁNH PLAYER (ĐỂ BẢNG PHỤ 1 RA HẠT ĐỎ)
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                    <div class="alert-banker">
+                        👉 CẢNH BÁO: ĐÁNH BANKER (ĐỂ BẢNG PHỤ 1 RA HẠT ĐỎ)
+                    </div>
+                """, unsafe_allow_html=True)
+            st.caption(f"🔍 Logic: {reason_text}")
+
+    # CỘT 2: Ô TIỀN CƯỢC CÙNG MÀU DỰ ĐOÁN
+    with col_c2:
+        st.markdown("#### 💵 Mức Cược Ván Này")
         stake_val = st.session_state["current_stake"]
         stake_rate = (stake_val / st.session_state["base_capital"]) * 100
         
         if st.session_state["table_state"] == "RED_READY" and predicted_side == "P":
             st.markdown(f"""
                 <div class="stake-box-player">
-                    <div style="font-size: 12px; font-weight: bold; opacity: 0.9;">CƯỢC PLAYER ({stake_rate:.0f}%)</div>
-                    <div class="stake-amount">{stake_val:,.0f} $</div>
+                    <div style="font-size: 13px; font-weight: bold; opacity: 0.9;">CƯỢC PLAYER ({stake_rate:.0f}% VỐN)</div>
+                    <div class="stake-amount">{stake_val:,.2f} $</div>
+                    <div style="font-size: 12px; margin-top: 4px;">Ván {st.session_state['table_bet_step']} / 2 ván của bàn</div>
                 </div>
             """, unsafe_allow_html=True)
         elif st.session_state["table_state"] == "RED_READY" and predicted_side == "B":
             st.markdown(f"""
                 <div class="stake-box-banker">
-                    <div style="font-size: 12px; font-weight: bold; opacity: 0.9;">CƯỢC BANKER ({stake_rate:.0f}%)</div>
-                    <div class="stake-amount">{stake_val:,.0f} $</div>
+                    <div style="font-size: 13px; font-weight: bold; opacity: 0.9;">CƯỢC BANKER ({stake_rate:.0f}% VỐN)</div>
+                    <div class="stake-amount">{stake_val:,.2f} $</div>
+                    <div style="font-size: 12px; margin-top: 4px;">Ván {st.session_state['table_bet_step']} / 2 ván của bàn</div>
                 </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown(f"""
                 <div class="stake-box-neutral">
-                    <div style="font-size: 12px; font-weight: bold; color: #5e6c84;">MỨC CƯỢC ({stake_rate:.0f}%)</div>
-                    <div class="stake-amount" style="color: #172b4d;">{stake_val:,.0f} $</div>
+                    <div style="font-size: 13px; font-weight: bold; color: #5e6c84;">MỨC CƯỢC CƠ SỞ ({stake_rate:.0f}%)</div>
+                    <div class="stake-amount" style="color: #172b4d;">{stake_val:,.2f} $</div>
+                    <div style="font-size: 12px; color: #5e6c84; margin-top: 4px;">Chờ tín hiệu vào lệnh</div>
                 </div>
             """, unsafe_allow_html=True)
 
-    with col_c2:
+    # CỘT 3: Ô ÂM/DƯƠNG PHIÊN & VỊ TRÍ LỆNH
+    with col_c3:
+        st.markdown("#### 📈 Âm/Dương Phiên Này")
         pnl_val = st.session_state["session_pnl"]
         cur_order = st.session_state["order_in_session"]
         
         if pnl_val < 0:
             st.markdown(f"""
                 <div class="pnl-box-negative">
-                    <div style="font-size: 12px; font-weight: bold;">LỆNH SỐ: {cur_order}</div>
-                    <div class="pnl-amount">{pnl_val:,.0f} $</div>
+                    <div style="font-size: 13px; font-weight: bold;">ĐANG ÂM PHIÊN {st.session_state['current_session_id']}</div>
+                    <div class="pnl-amount">{pnl_val:,.2f} $</div>
+                    <div style="font-size: 13px; font-weight: bold; margin-top: 4px; color: #bf2600;">ĐANG Ở LỆNH SỐ: {cur_order}</div>
                 </div>
             """, unsafe_allow_html=True)
         elif pnl_val > 0:
             st.markdown(f"""
                 <div class="pnl-box-positive">
-                    <div style="font-size: 12px; font-weight: bold;">LỆNH SỐ: {cur_order}</div>
-                    <div class="pnl-amount">+{pnl_val:,.0f} $</div>
+                    <div style="font-size: 13px; font-weight: bold;">ĐANG LÃI PHIÊN {st.session_state['current_session_id']}</div>
+                    <div class="pnl-amount">+{pnl_val:,.2f} $</div>
+                    <div style="font-size: 13px; font-weight: bold; margin-top: 4px; color: #006644;">ĐANG Ở LỆNH SỐ: {cur_order}</div>
                 </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown(f"""
                 <div class="pnl-box-zero">
-                    <div style="font-size: 12px; font-weight: bold;">LỆNH SỐ: {cur_order}</div>
-                    <div class="pnl-amount">0 $</div>
+                    <div style="font-size: 13px; font-weight: bold;">HÒA VỐN PHIÊN {st.session_state['current_session_id']}</div>
+                    <div class="pnl-amount">0.00 $</div>
+                    <div style="font-size: 13px; font-weight: bold; margin-top: 4px; color: #42526e;">ĐANG Ở LỆNH SỐ: {cur_order}</div>
                 </div>
             """, unsafe_allow_html=True)
 
-    # KHU VỰC HIỂN THỊ HẠT ĐÃ NHẬP & BẢNG PHỤ 1
-    col_v1, col_v2 = st.columns([2.2, 0.8])
+    # ==============================================================================
+    # KHU VỰC HIỂN THỊ HẠT TRÒN B/P & NÚT ĐỔI BÀN THỦ CÔNG
+    # ==============================================================================
+    st.markdown("---")
+    
+    col_v1, col_v2, col_v3 = st.columns([1.5, 1.2, 0.8])
     with col_v1:
-        beads_html = []
+        st.write("**Chuỗi ván bài (Big Road) đã nhập:**")
         if st.session_state["table_hands"]:
+            beads_html = []
             for h in st.session_state["table_hands"]:
-                beads_html.append(f"<span class='bead-{h.lower()}'>{h}</span>")
-        if eye_list:
-            beads_html.append("<span style='margin: 0 6px; color: #aaa;'>|</span>")
-            for e in eye_list:
-                cls = 'eye-circle-red' if e == 'RED' else 'eye-circle-blue'
-                beads_html.append(f"<span class='{cls}'></span>")
-        
-        if beads_html:
-            st.markdown("".join(beads_html), unsafe_allow_html=True)
+                if h == 'B':
+                    beads_html.append("<span class='bead-b'>B</span>")
+                else:
+                    beads_html.append("<span class='bead-p'>P</span>")
+            st.markdown(" ".join(beads_html), unsafe_allow_html=True)
         else:
             st.caption("Chưa có ván bài nào.")
+            
     with col_v2:
-        if st.button("🔄 Bỏ bàn", use_container_width=True):
+        st.write("**Bảng Phụ 1 tương ứng:**")
+        if eye_list:
+            eye_html = []
+            for e in eye_list:
+                if e == 'RED':
+                    eye_html.append("<span class='eye-circle-red'></span>")
+                else:
+                    eye_html.append("<span class='eye-circle-blue'></span>")
+            st.markdown(" ".join(eye_html), unsafe_allow_html=True)
+        else:
+            st.caption("Chưa đủ ván để xuất hiện hạt đầu tiên.")
+
+    with col_v3:
+        st.write("**Thao tác bàn:**")
+        if st.button("🔄 Đổi Bàn Này Đi", use_container_width=True):
             switch_to_new_table()
 
-    # NÚT ĐỔI BÀN HOẶC 2 NÚT BẤM KẾT QUẢ DUY NHẤT (ĐÃ BỎ HÒA)
+    # ==============================================================================
+    # KHU VỰC ĐIỀU KHIỂN: CHỈ CÒN ĐÚNG 2 NÚT BẤM (ĐÃ BỎ HÒA)
+    # ==============================================================================
+    st.markdown("---")
+    
     if st.session_state["table_state"] == "BLUE_SKIP":
-        if st.button("🔄 ĐỔI SANG BÀN MỚI TINH", use_container_width=True, type="primary"):
+        st.markdown("<h3 style='color: #d32f2f; text-align: center;'>⚠️ BÀN NÀY ĐÃ BỊ HỦY DO HẠT ĐẦU TIÊN RA XANH</h3>", unsafe_allow_html=True)
+        if st.button("🔄 BẤM VÀO ĐÂY ĐỂ ĐỔI SANG BÀN MỚI TINH (RESET BÀN)", use_container_width=True, type="primary"):
             switch_to_new_table()
     else:
-        # CHỈ CÒN ĐÚNG 2 NÚT BẤM TO CHIA ĐỀU 50% - 50%
+        st.markdown("### 🎲 Nhập Kết Quả Ván Bài Vừa Mở Tại Bàn")
+        
+        # CHỈ 2 NÚT TO ĐỀU 50-50: PLAYER VÀ BANKER
         col_btn_p, col_btn_b = st.columns(2)
 
         def process_result(actual_result):
@@ -572,13 +628,13 @@ else:
                         "Phiên": st.session_state["current_session_id"],
                         "STT Lệnh": st.session_state["order_in_session"],
                         "Bàn": current_table,
-                        "Ván": f"{current_step}/2",
+                        "Ván Tại Bàn": f"Ván {current_step}/2",
                         "Cửa Đánh": "BANKER" if predicted_side == "B" else "PLAYER",
-                        "Kết Quả": actual_result,
-                        "Đúng/Sai": "WIN",
-                        "Tiền Cược": stake,
-                        "Lãi/Lỗ": win_profit,
-                        "Lũy Kế": st.session_state["session_pnl"]
+                        "Kết Quả Thực Tế": actual_result,
+                        "Đúng/Sai": "WIN (Thắng)",
+                        "Tiền Cược ($)": stake,
+                        "Tiền Lãi/Lỗ ($)": win_profit,
+                        "Lợi Nhuận Lũy Kế ($)": st.session_state["session_pnl"]
                     })
                     
                     if st.session_state["order_in_session"] == 1:
@@ -589,7 +645,7 @@ else:
                         st.session_state["session_running"] = False
                         st.rerun()
                         
-                    # Thắng -> Đổi bàn mới
+                    # Thắng ván 1 hoặc 2 -> Chuyển bàn mới
                     st.session_state["table_hands"] = []
                     st.session_state["table_state"] = "WAIT"
                     st.session_state["table_bet_step"] = 1
@@ -610,19 +666,21 @@ else:
                         "Phiên": st.session_state["current_session_id"],
                         "STT Lệnh": st.session_state["order_in_session"],
                         "Bàn": current_table,
-                        "Ván": f"{current_step}/2",
+                        "Ván Tại Bàn": f"Ván {current_step}/2",
                         "Cửa Đánh": "BANKER" if predicted_side == "B" else "PLAYER",
-                        "Kết Quả": actual_result,
-                        "Đúng/Sai": "LOSE",
-                        "Tiền Cược": stake,
-                        "Lãi/Lỗ": -stake,
-                        "Lũy Kế": st.session_state["session_pnl"]
+                        "Kết Quả Thực Tế": actual_result,
+                        "Đúng/Sai": "LOSE (Thua)",
+                        "Tiền Cược ($)": stake,
+                        "Tiền Lãi/Lỗ ($)": -stake,
+                        "Lợi Nhuận Lũy Kế ($)": st.session_state["session_pnl"]
                     })
                     
+                    # Ván 1 Thua -> Tiếp tục Ván 2 của bàn đó
                     if current_step == 1:
                         st.session_state["table_bet_step"] = 2
                         st.session_state["table_hands"].append(actual_result)
                     else:
+                        # Xong Ván 2 mà Thua -> Đổi bàn mới
                         st.session_state["table_hands"] = []
                         st.session_state["table_state"] = "WAIT"
                         st.session_state["table_bet_step"] = 1
@@ -636,18 +694,20 @@ else:
                 st.rerun()
 
         with col_btn_p:
-            if st.button("🔵 PLAYER (P)", use_container_width=True):
+            if st.button("🔵 BÀN RA: PLAYER (P)", use_container_width=True):
                 process_result("P")
 
         with col_btn_b:
-            if st.button("🔴 BANKER (B)", use_container_width=True):
+            if st.button("🔴 BÀN RA: BANKER (B)", use_container_width=True):
                 process_result("B")
 
 # ==============================================================================
-# NHẬT KÝ VÀO LỆNH GỌN GÀNG Ở DƯỚI CÙNG
+# NHẬT KÝ CHI TIẾT
 # ==============================================================================
+st.markdown("---")
+st.markdown(f"### 📋 Nhật Ký Vào Lệnh Hôm Nay ({today_str})")
 if st.session_state["daily_history"]:
-    st.markdown("---")
-    with st.expander("📋 Xem Nhật Ký Chi Tiết", expanded=False):
-        df_history = pd.DataFrame(st.session_state["daily_history"])
-        st.dataframe(df_history.iloc[::-1], use_container_width=True, hide_index=True)
+    df_history = pd.DataFrame(st.session_state["daily_history"])
+    st.dataframe(df_history.iloc[::-1], use_container_width=True, hide_index=True)
+else:
+    st.caption("Chưa có lệnh nào được thực hiện trong phiên hôm nay.")
