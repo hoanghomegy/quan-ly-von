@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# CSS GIAO DIỆN CẢNH BÁO: CHỮ TO RÕ NÉT THEO QUY CHUẨN
+# CSS GIAO DIỆN CẢNH BÁO & HẠT TRÒN CHUẨN CASINO
 # ==============================================================================
 st.markdown("""
 <style>
@@ -73,43 +73,69 @@ st.markdown("""
         font-weight: 700;
         margin: 15px 0;
     }
-    .road-badge-b {
+    /* HẠT TRÒN BIG ROAD */
+    .bead-b {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
         background-color: #d32f2f;
-        color: white;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-weight: bold;
-        margin: 2px;
-        display: inline-block;
+        color: #ffffff;
+        font-weight: 900;
+        font-size: 18px;
+        margin: 3px;
+        box-shadow: 0 2px 5px rgba(211, 47, 47, 0.4);
     }
-    .road-badge-p {
+    .bead-p {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
         background-color: #0052cc;
-        color: white;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-weight: bold;
-        margin: 2px;
-        display: inline-block;
+        color: #ffffff;
+        font-weight: 900;
+        font-size: 18px;
+        margin: 3px;
+        box-shadow: 0 2px 5px rgba(0, 82, 204, 0.4);
     }
-    .eye-red {
-        background-color: #ffebe6;
-        color: #de350b;
-        border: 1px solid #ffbdad;
-        padding: 4px 8px;
-        border-radius: 12px;
-        font-weight: bold;
-        margin: 2px;
-        display: inline-block;
+    /* HẠT TRÒN BẢNG PHỤ 1 */
+    .eye-circle-red {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 4px solid #d32f2f;
+        background-color: #ffffff;
+        margin: 3px;
+        box-shadow: 0 2px 4px rgba(211, 47, 47, 0.2);
     }
-    .eye-blue {
-        background-color: #deebff;
-        color: #0747a6;
-        border: 1px solid #b3d4ff;
-        padding: 4px 8px;
-        border-radius: 12px;
-        font-weight: bold;
-        margin: 2px;
+    .eye-circle-blue {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 4px solid #0052cc;
+        background-color: #ffffff;
+        margin: 3px;
+        box-shadow: 0 2px 4px rgba(0, 82, 204, 0.2);
+    }
+    .table-badge {
         display: inline-block;
+        background-color: #ebecf0;
+        color: #172b4d;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 8px;
     }
     @keyframes pulse {
         0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.4); }
@@ -120,19 +146,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# HÀM LOGIC TÍNH BẢNG PHỤ 1 (BIG EYE BOY) CHUẨN XÁC 100% QUỐC TẾ
+# HÀM LOGIC TÍNH BẢNG PHỤ 1 (BIG EYE BOY) CHUẨN XÁC QUỐC TẾ
 # ==============================================================================
 def calculate_big_eye_boy(hands):
-    """
-    Quy tắc chuẩn quốc tế của Big Eye Road:
-    - Bắt đầu tính từ: (Cột 2, Dòng 2 trở lên) HOẶC (Cột 3, Dòng 1 trở lên).
-    - Khi đi xuống (Row >= 2): So sánh Row với độ dài cột bên trái liền kề.
-      Nếu Row <= Left_Len -> ĐỎ (có hạt đối xứng).
-      Nếu Row > Left_Len -> XANH (hụt chân).
-    - Khi mở cột mới (Row == 1): So sánh độ dài 2 cột liền kề trước đó.
-      Nếu Col[k-2] == Col[k-3] -> ĐỎ (bằng nhau).
-      Nếu Col[k-2] != Col[k-3] -> XANH (lệch nhau).
-    """
     if len(hands) < 2:
         return []
     
@@ -164,7 +180,7 @@ def calculate_big_eye_boy(hands):
         k = len(all_c)     # Cột hiện tại (1-based)
         row = len(curr_c)  # Dòng hiện tại trong cột (1-based)
         
-        # Bắt đầu vẽ Big Eye Boy
+        # Bắt đầu vẽ Big Eye Boy từ: Cột 2 dòng >= 2 hoặc Cột >= 3
         if (k == 2 and row >= 2) or (k >= 3):
             if not is_new:
                 # Đi xuống: So sánh với cột bên trái (all_c[k-2])
@@ -174,7 +190,7 @@ def calculate_big_eye_boy(hands):
                 else:
                     big_eye.append('BLUE')
             else:
-                # Mở cột mới: So sánh độ dài 2 cột trước đó (all_c[k-2] và all_c[k-3])
+                # Mở cột mới: So sánh độ dài 2 cột liền kề trước đó
                 len_prev1 = len(all_c[k - 2])
                 len_prev2 = len(all_c[k - 3])
                 if len_prev1 == len_prev2:
@@ -185,9 +201,7 @@ def calculate_big_eye_boy(hands):
     return big_eye
 
 def predict_next_hand_for_red(hands):
-    """
-    Thử nghiệm xem ván tiếp theo nếu ra B hay P thì hạt tiếp theo của Bảng Phụ 1 là RED
-    """
+    """Tính cửa cược tiếp theo để hạt Bảng Phụ 1 ra ĐỎ"""
     eye_now = calculate_big_eye_boy(hands)
     eye_b = calculate_big_eye_boy(hands + ['B'])
     eye_p = calculate_big_eye_boy(hands + ['P'])
@@ -200,7 +214,6 @@ def predict_next_hand_for_red(hands):
     elif p_gives_red and not b_gives_red:
         return 'P', "Đánh PLAYER để Bảng Phụ 1 ra Hạt Đỏ"
     elif b_gives_red and p_gives_red:
-        # Nếu cả 2 đều tạo đỏ, bắt theo nhịp cầu đảo chiều
         opp = 'P' if hands[-1] == 'B' else 'B'
         return opp, f"Cả 2 đều Đỏ -> Bắt nhịp cầu nhảy: {opp}"
     else:
@@ -355,7 +368,7 @@ else:
     
     col_c1, col_c2 = st.columns([1.8, 1.2])
     with col_c1:
-        st.markdown(f"#### 📢 Tín Hiệu Vào Lệnh (Lệnh thứ {st.session_state['order_in_session']} | Bàn {st.session_state['table_id']})")
+        st.markdown(f"<div class='table-badge'>🏢 ĐANG Ở BÀN SỐ {st.session_state['table_id']} | LỆNH THỨ {st.session_state['order_in_session']} CỦA PHIÊN</div>", unsafe_allow_html=True)
         
         # TRƯỜNG HỢP 1: BẢNG PHỤ 1 RA XANH -> BỎ BÀN
         if st.session_state["table_state"] == "BLUE_SKIP":
@@ -411,7 +424,7 @@ else:
         st.caption(f"Trạng thái: **Đang đánh Ván {st.session_state['table_bet_step']} / Tối đa 2 ván**")
 
     # ==============================================================================
-    # KHU VỰC HIỂN THỊ DỮ LIỆU ĐÃ NHẬP VÀ BẢNG PHỤ 1 ĐỂ THEO DÕI
+    # KHU VỰC HIỂN THỊ HẠT TRÒN B/P & BẢNG PHỤ 1
     # ==============================================================================
     st.markdown("---")
     st.markdown(f"#### 🔍 Dữ Liệu Bàn Hiện Tại (Bàn {st.session_state['table_id']}):")
@@ -420,36 +433,36 @@ else:
     with col_v1:
         st.write("**Chuỗi ván bài (Big Road) đã nhập:**")
         if st.session_state["table_hands"]:
-            badges = []
+            beads_html = []
             for h in st.session_state["table_hands"]:
                 if h == 'B':
-                    badges.append("<span class='road-badge-b'>BANKER</span>")
+                    beads_html.append("<span class='bead-b'>B</span>")
                 else:
-                    badges.append("<span class='road-badge-p'>PLAYER</span>")
-            st.markdown(" ".join(badges), unsafe_allow_html=True)
+                    beads_html.append("<span class='bead-p'>P</span>")
+            st.markdown(" ".join(beads_html), unsafe_allow_html=True)
         else:
             st.caption("Chưa có ván bài nào.")
             
     with col_v2:
         st.write("**Bảng Phụ 1 (Big Eye Boy) tương ứng:**")
         if eye_list:
-            eye_badges = []
+            eye_html = []
             for e in eye_list:
                 if e == 'RED':
-                    eye_badges.append("<span class='eye-red'>🔴 HẠT ĐỎ</span>")
+                    eye_html.append("<span class='eye-circle-red'></span>")
                 else:
-                    eye_badges.append("<span class='eye-blue'>🔵 HẠT XANH</span>")
-            st.markdown(" ".join(eye_badges), unsafe_allow_html=True)
+                    eye_html.append("<span class='eye-circle-blue'></span>")
+            st.markdown(" ".join(eye_html), unsafe_allow_html=True)
         else:
             st.caption("Chưa đủ ván để xuất hiện hạt đầu tiên.")
 
     # ==============================================================================
-    # BẢNG ĐIỀU KHIỂN: BẤM KẾT QUẢ VÁN MỞ RA
+    # BẢNG ĐIỀU KHIỂN: ĐÃ ĐẢO VỊ TRÍ NÚT THEO ĐÚNG MŨI TÊN (P SANG TRÁI, B Ở GIỮA)
     # ==============================================================================
     st.markdown("---")
     st.markdown("### 🎲 Nhập Kết Quả Ván Bài Vừa Mở Tại Bàn")
     
-    col_btn_b, col_btn_p, col_btn_t = st.columns(3)
+    col_btn_p, col_btn_b, col_btn_t = st.columns(3)
 
     def process_result(actual_result):
         if st.session_state["table_state"] == "RED_READY" and predicted_side is not None:
@@ -485,7 +498,7 @@ else:
                     st.session_state["session_running"] = False
                     st.rerun()
                     
-                # Thắng ván 1 hoặc 2 -> Đều hoàn thành bàn này, chuyển sang bàn mới
+                # Thắng ván 1 hoặc 2 -> Chuyển bàn mới
                 st.session_state["table_hands"] = []
                 st.session_state["table_state"] = "WAIT"
                 st.session_state["table_bet_step"] = 1
@@ -517,18 +530,17 @@ else:
                     "Lợi Nhuận Lũy Kế ($)": st.session_state["session_pnl"]
                 })
                 
-                # NẾU LÀ VÁN 1 THUA -> TIẾP TỤC VÀO VÁN 2 CỦA BÀN ĐÓ
+                # Ván 1 Thua -> Vào tiếp Ván 2 của bàn đó
                 if current_step == 1:
                     st.session_state["table_bet_step"] = 2
                     st.session_state["table_hands"].append(actual_result)
                 else:
-                    # ĐÃ ĐÁNH XONG VÁN 2 MÀ THUA -> HẾT HẠN MỨC BÀN -> CHUYỂN BÀN MỚI
+                    # Xong Ván 2 mà Thua -> Hết hạn mức bàn -> Đổi bàn mới
                     st.session_state["table_hands"] = []
                     st.session_state["table_state"] = "WAIT"
                     st.session_state["table_bet_step"] = 1
                     st.session_state["table_id"] += 1
                     
-                # Thua -> Lệnh sau đánh bằng tiền cơ sở 10%
                 st.session_state["current_stake"] = st.session_state["base_capital"] * 0.10
                 st.session_state["order_in_session"] += 1
                 st.rerun()
@@ -537,14 +549,17 @@ else:
             st.session_state["table_hands"].append(actual_result)
             st.rerun()
 
-    with col_btn_b:
-        if st.button("🔴 BÀN VỪA MỞ RA: BANKER (B)", use_container_width=True, type="primary"):
-            process_result("B")
-
+    # NÚT PLAYER Ở BÊN TRÁI (CỘT 1)
     with col_btn_p:
         if st.button("🔵 BÀN VỪA MỞ RA: PLAYER (P)", use_container_width=True):
             process_result("P")
 
+    # NÚT BANKER Ở GIỮA (CỘT 2)
+    with col_btn_b:
+        if st.button("🔴 BÀN VỪA MỞ RA: BANKER (B)", use_container_width=True, type="primary"):
+            process_result("B")
+
+    # NÚT HÒA Ở BÊN PHẢI (CỘT 3)
     with col_btn_t:
         if st.button("🟢 BÀN VỪA MỞ RA: HÒA (TIE)", use_container_width=True):
             st.info("Ván Hòa hoàn tiền! Giữ nguyên trạng thái lệnh.")
