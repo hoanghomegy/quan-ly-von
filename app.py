@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# CSS GIAO DIỆN CẢNH BÁO, HẠT TRÒN & NÚT ĐỔI BÀN
+# CSS GIAO DIỆN CẢNH BÁO, HẠT TRÒN & Ô TIỀN ĐỒNG BỘ MÀU SẮC
 # ==============================================================================
 st.markdown("""
 <style>
@@ -20,7 +20,7 @@ st.markdown("""
         padding: 24px;
         border-radius: 12px;
         text-align: center;
-        font-size: 34px;
+        font-size: 32px;
         font-weight: 900;
         letter-spacing: 2px;
         box-shadow: 0 4px 15px rgba(0, 82, 204, 0.4);
@@ -32,7 +32,7 @@ st.markdown("""
         padding: 24px;
         border-radius: 12px;
         text-align: center;
-        font-size: 34px;
+        font-size: 32px;
         font-weight: 900;
         letter-spacing: 2px;
         box-shadow: 0 4px 15px rgba(211, 47, 47, 0.4);
@@ -58,7 +58,7 @@ st.markdown("""
         padding: 22px;
         border-radius: 12px;
         text-align: center;
-        font-size: 28px;
+        font-size: 26px;
         font-weight: 900;
         margin: 15px 0;
     }
@@ -73,6 +73,75 @@ st.markdown("""
         font-weight: 700;
         margin: 15px 0;
     }
+
+    /* Ô HIỂN THỊ TIỀN CƯỢC ĐỒNG MÀU CẢNH BÁO */
+    .stake-box-player {
+        background-color: #0052cc;
+        color: #ffffff;
+        padding: 16px;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0, 82, 204, 0.3);
+        margin-bottom: 10px;
+    }
+    .stake-box-banker {
+        background-color: #d32f2f;
+        color: #ffffff;
+        padding: 16px;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
+        margin-bottom: 10px;
+    }
+    .stake-box-neutral {
+        background-color: #f4f5f7;
+        color: #172b4d;
+        border: 2px solid #dfe1e6;
+        padding: 16px;
+        border-radius: 12px;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+    .stake-amount {
+        font-size: 32px;
+        font-weight: 900;
+        letter-spacing: 1px;
+    }
+
+    /* Ô HIỂN THỊ TIỀN ÂM / DƯƠNG PHIÊN */
+    .pnl-box-negative {
+        background-color: #ffebe6;
+        border: 2px solid #ff8f73;
+        color: #de350b;
+        padding: 16px;
+        border-radius: 12px;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+    .pnl-box-positive {
+        background-color: #e3fcef;
+        border: 2px solid #57d9a3;
+        color: #00875a;
+        padding: 16px;
+        border-radius: 12px;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+    .pnl-box-zero {
+        background-color: #f4f5f7;
+        border: 2px solid #dfe1e6;
+        color: #42526e;
+        padding: 16px;
+        border-radius: 12px;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+    .pnl-amount {
+        font-size: 32px;
+        font-weight: 900;
+        letter-spacing: 1px;
+    }
+
     /* HẠT TRÒN BIG ROAD */
     .bead-b {
         display: inline-flex;
@@ -179,19 +248,6 @@ st.markdown("""
 # HÀM LOGIC TÍNH BẢNG PHỤ 1 (BIG EYE BOY) CHUẨN XÁC 100% QUỐC TẾ
 # ==============================================================================
 def calculate_big_eye_boy(hands):
-    """
-    Quy tắc chuẩn quốc tế của Big Eye Road (Derived Roads):
-    - Bắt đầu tính từ: (Cột 2, dòng >= 2) hoặc (Cột >= 3, dòng 1)
-    1. Khi mở cột mới (is_new_col = True):
-       - So sánh độ dài 2 cột liền kề trước đó:
-       - Nếu Col[k-2] == Col[k-3] -> ĐỎ
-       - Nếu Col[k-2] != Col[k-3] -> XANH
-    2. Khi đi tiếp xuống dưới (is_new_col = False):
-       - So sánh Row hiện tại với độ dài cột bên trái (Left_Len = Col[k-2]):
-       - Nếu Row <= Left_Len: ĐỎ (có hạt đối xứng)
-       - Nếu Row == Left_Len + 1: XANH (vừa rơi khỏi độ dài đối xứng)
-       - Nếu Row > Left_Len + 1: ĐỎ (dây bệt Streak/Dragon tiếp tục kéo dài)
-    """
     if len(hands) < 2:
         return []
     
@@ -210,18 +266,15 @@ def calculate_big_eye_boy(hands):
             is_new = True
             
         all_c = temp_cols + [curr_c]
-        k = len(all_c)     # Cột hiện tại (1-based)
-        row = len(curr_c)  # Dòng hiện tại trong cột (1-based)
+        k = len(all_c)
+        row = len(curr_c)
         
-        # Bắt đầu vẽ từ Cột 2 dòng >= 2 hoặc Cột >= 3
         if (k == 2 and row >= 2) or (k >= 3):
             if is_new:
-                # Mở cột mới: so sánh độ dài 2 cột trước đó
                 len1 = len(all_c[k - 2])
                 len2 = len(all_c[k - 3])
                 big_eye.append('RED' if len1 == len2 else 'BLUE')
             else:
-                # Đi xuống trong cùng cột:
                 left_len = len(all_c[k - 2])
                 if row <= left_len:
                     big_eye.append('RED')
@@ -234,9 +287,6 @@ def calculate_big_eye_boy(hands):
     return big_eye
 
 def predict_next_hand_for_red(hands):
-    """
-    Thử nghiệm ván sau ra B hay P thì hạt tiếp theo của Bảng Phụ 1 là RED
-    """
     eye_now = calculate_big_eye_boy(hands)
     eye_b = calculate_big_eye_boy(hands + ['B'])
     eye_p = calculate_big_eye_boy(hands + ['P'])
@@ -249,7 +299,6 @@ def predict_next_hand_for_red(hands):
     elif p_gives_red and not b_gives_red:
         return 'P', "Đánh PLAYER để Bảng Phụ 1 ra Hạt Đỏ"
     elif b_gives_red and p_gives_red:
-        # Nếu cả 2 đều tạo đỏ, theo luật bám dây cùng màu với ván trước
         curr = hands[-1] if hands else 'B'
         return curr, f"Cả 2 đều tạo Đỏ -> Bám thế bệt: {curr}"
     else:
@@ -409,7 +458,9 @@ else:
     predicted_side = None
     reason_text = ""
     
-    col_c1, col_c2 = st.columns([1.8, 1.2])
+    # CHIA THÀNH 3 CỘT: CẢNH BÁO (CỘT 1) | MỨC CƯỢC ĐỒNG MÀU (CỘT 2) | ÂM/DƯƠNG PHIÊN (CỘT 3)
+    col_c1, col_c2, col_c3 = st.columns([1.6, 1.1, 1.1])
+    
     with col_c1:
         st.markdown(f"<div class='table-badge'>🏢 ĐANG Ở BÀN SỐ {st.session_state['table_id']} | LỆNH THỨ {st.session_state['order_in_session']} CỦA PHIÊN</div>", unsafe_allow_html=True)
         
@@ -447,15 +498,70 @@ else:
                 """, unsafe_allow_html=True)
             st.caption(f"🔍 Logic: {reason_text}")
 
+    # CỘT 2: Ô TIỀN CƯỢC CÙNG NỀN MÀU VỚI CỬA DỰ ĐOÁN
     with col_c2:
-        st.markdown("#### 💵 Mức Tiền Cược Lệnh Này")
-        stake_rate = (st.session_state["current_stake"] / st.session_state["base_capital"]) * 100
-        st.metric(
-            label="Số tiền cược ván này",
-            value=f"{st.session_state['current_stake']:,.2f} $",
-            delta=f"{stake_rate:.0f}% Vốn cơ sở"
-        )
-        st.caption(f"Trạng thái: **Đang đánh Ván {st.session_state['table_bet_step']} / Tối đa 2 ván**")
+        st.markdown("#### 💵 Mức Cược Ván Này")
+        stake_val = st.session_state["current_stake"]
+        stake_rate = (stake_val / st.session_state["base_capital"]) * 100
+        
+        if st.session_state["table_state"] == "RED_READY" and predicted_side == "P":
+            # NỀN XANH DƯƠNG CHỮ TRẮNG CHO PLAYER
+            st.markdown(f"""
+                <div class="stake-box-player">
+                    <div style="font-size: 13px; font-weight: bold; opacity: 0.9;">CƯỢC PLAYER ({stake_rate:.0f}% VỐN)</div>
+                    <div class="stake-amount">{stake_val:,.2f} $</div>
+                    <div style="font-size: 12px; margin-top: 4px;">Ván {st.session_state['table_bet_step']} / 2 ván của bàn</div>
+                </div>
+            """, unsafe_allow_html=True)
+        elif st.session_state["table_state"] == "RED_READY" and predicted_side == "B":
+            # NỀN ĐỎ CHỮ TRẮNG CHO BANKER
+            st.markdown(f"""
+                <div class="stake-box-banker">
+                    <div style="font-size: 13px; font-weight: bold; opacity: 0.9;">CƯỢC BANKER ({stake_rate:.0f}% VỐN)</div>
+                    <div class="stake-amount">{stake_val:,.2f} $</div>
+                    <div style="font-size: 12px; margin-top: 4px;">Ván {st.session_state['table_bet_step']} / 2 ván của bàn</div>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            # TRẠNG THÁI TRUNG TÍNH (CHỜ VÁN MỒI)
+            st.markdown(f"""
+                <div class="stake-box-neutral">
+                    <div style="font-size: 13px; font-weight: bold; color: #5e6c84;">MỨC CƯỢC CƠ SỞ ({stake_rate:.0f}%)</div>
+                    <div class="stake-amount" style="color: #172b4d;">{stake_val:,.2f} $</div>
+                    <div style="font-size: 12px; color: #5e6c84; margin-top: 4px;">Chờ tín hiệu vào lệnh</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+    # CỘT 3: Ô HIỂN THỊ SỐ TIỀN ÂM / DƯƠNG CỦA PHIÊN & VỊ TRÍ LỆNH
+    with col_c3:
+        st.markdown("#### 📈 Âm/Dương Phiên Này")
+        pnl_val = st.session_state["session_pnl"]
+        cur_order = st.session_state["order_in_session"]
+        
+        if pnl_val < 0:
+            st.markdown(f"""
+                <div class="pnl-box-negative">
+                    <div style="font-size: 13px; font-weight: bold;">ĐANG ÂM PHIÊN {st.session_state['current_session_id']}</div>
+                    <div class="pnl-amount">{pnl_val:,.2f} $</div>
+                    <div style="font-size: 13px; font-weight: bold; margin-top: 4px; color: #bf2600;">ĐANG Ở LỆNH SỐ: {cur_order}</div>
+                </div>
+            """, unsafe_allow_html=True)
+        elif pnl_val > 0:
+            st.markdown(f"""
+                <div class="pnl-box-positive">
+                    <div style="font-size: 13px; font-weight: bold;">ĐANG LÃI PHIÊN {st.session_state['current_session_id']}</div>
+                    <div class="pnl-amount">+{pnl_val:,.2f} $</div>
+                    <div style="font-size: 13px; font-weight: bold; margin-top: 4px; color: #006644;">ĐANG Ở LỆNH SỐ: {cur_order}</div>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+                <div class="pnl-box-zero">
+                    <div style="font-size: 13px; font-weight: bold;">HÒA VỐN PHIÊN {st.session_state['current_session_id']}</div>
+                    <div class="pnl-amount">0.00 $</div>
+                    <div style="font-size: 13px; font-weight: bold; margin-top: 4px; color: #42526e;">ĐANG Ở LỆNH SỐ: {cur_order}</div>
+                </div>
+            """, unsafe_allow_html=True)
 
     # ==============================================================================
     # KHU VỰC HIỂN THỊ HẠT TRÒN B/P & NÚT ĐỔI BÀN THỦ CÔNG
@@ -576,7 +682,7 @@ else:
                         st.session_state["table_bet_step"] = 2
                         st.session_state["table_hands"].append(actual_result)
                     else:
-                        # Xong Ván 2 mà Thua -> Đổi bàn mới
+                        # Xong Ván 2 mà Thua -> Đổi sang bàn mới
                         st.session_state["table_hands"] = []
                         st.session_state["table_state"] = "WAIT"
                         st.session_state["table_bet_step"] = 1
